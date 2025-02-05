@@ -1,4 +1,18 @@
 - commits:
+    - subject: Fix error in API docs for /url write method
+      hash: b52908418e3a39e2b6d95bef754bfaa9d2eb4770
+      body: >
+        After having issues with this API, I checked the source code and
+        realised the /url path accepts POST, not PUT, in order to change url.
+      footer:
+        Change-type: minor
+        change-type: minor
+      author: Lorenzo Paoliani
+      nested: []
+  version: 2.10.0
+  title: ""
+  date: 2025-02-05T08:42:36.904Z
+- commits:
     - subject: Add AUTO_REFRESH environment variable
       hash: fc99cc51c203563bbba5ae9b9f4cb81a985df90d
       body: ""
