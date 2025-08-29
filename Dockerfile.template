@@ -1,4 +1,4 @@
-FROM node:20.19.2-bookworm
+FROM node:20.19.4-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -14,6 +14,7 @@ COPY ./package.json /usr/src/app/package.json
 RUN JOBS=MAX npm install --unsafe-perm --production && npm cache clean --force
 
 COPY ./src /usr/src/app/
+COPY ./extensions /usr/share/chromium/extensions/
 
 RUN chmod +x ./*.sh
 
@@ -31,6 +32,7 @@ RUN useradd chromium -m -s /bin/bash -G root || true && \
 COPY ./public-html /home/chromium  
 
 # udev rule to set specific permissions 
+RUN mkdir -p /etc/udev/rules.d
 RUN echo 'SUBSYSTEM=="vchiq",GROUP="video",MODE="0660"' > /etc/udev/rules.d/10-vchiq-permissions.rules
 RUN usermod -a -G audio,video,tty chromium
 
