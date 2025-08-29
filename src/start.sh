@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+service seatd start
+
 # this allows chromium sandbox to run, see https://github.com/balena-os/meta-balena/issues/2319
 sysctl -w user.max_user_namespaces=10000
 
@@ -8,9 +10,9 @@ sysctl -w user.max_user_namespaces=10000
 
 export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
 
-sed -i -e 's/console/anybody/g' /etc/X11/Xwrapper.config
-echo "needs_root_rights=yes" >> /etc/X11/Xwrapper.config
-dpkg-reconfigure xserver-xorg-legacy
+# this uses the legacy DRM interface. explained here: https://github.com/swaywm/sway/issues/7519
+# without this, we get errors like this frequently: [backend/drm/atomic.c:79] connector HDMI-A-1: Atomic commit failed: Device or resource busy
+export WLR_DRM_NO_ATOMIC=1
 
 echo "balenaLabs browser version: $(<VERSION)"
 
@@ -24,16 +26,6 @@ if [[ -z "$DISPLAY_NUM" ]]
     export DISPLAY_NUM=0
 fi
 
-# set whether to show a cursor or not
-if [[ -n $SHOW_CURSOR ]] && [[ "$SHOW_CURSOR" -eq "1" ]]
-  then
-    export CURSOR=''
-    echo "Enabling cursor"
-  else
-    export CURSOR='-- -nocursor'
-    echo "Disabling cursor"
-fi
-
 # If the vcgencmd is supported (i.e. RPi device) - check enough GPU memory is allocated
 if command -v vcgencmd &> /dev/null
 then
@@ -44,20 +36,36 @@ then
 	fi
 fi
 
-# Inject X11 config on the RPi 5 as the defaults do not work
-# We do this in the startup script and only for the RPi 5 because
-# we build the images per-architecture and we do not want to break
-# other aarch64-based device types
-if [ "${BALENA_DEVICE_TYPE}" = "raspberrypi5" ]
-then
-    echo "Raspberry Pi 5 detected, injecting X.org config"
-    cp -a "/usr/src/build/rpi/99-vc4.conf" "/etc/X11/xorg.conf.d/"
-fi
-
 # set up the user data area
 mkdir -p /data/chromium
 chown -R chromium:chromium /data
 rm -f /data/chromium/SingletonLock
+
+if [ -z "$XDG_RUNTIME_DIR" ]; then
+    XDG_RUNTIME_DIR="/tmp/$(id -u chromium)-runtime-dir"
+
+    mkdir -pm 0700 "$XDG_RUNTIME_DIR"
+    chown -R chromium:chromium "$XDG_RUNTIME_DIR"
+    export XDG_RUNTIME_DIR
+fi
+
+# enable hotplugging of input devices
+if which udevadm > /dev/null; then
+  set +e # Disable exit on error
+  udevadm control --reload-rules
+  service udev restart
+  udevadm trigger
+  set -e # Re-enable exit on error
+fi
+
+# tell plymouth (splash screen) to quit so that wayland can become drm master
+# https://forums.balena.io/t/plymouthd-does-not-quit-and-prevents-gui-apps-from-rendering/372310
+dbus-send \
+--system \
+--dest=org.freedesktop.systemd1 \
+--type=method_call \
+/org/freedesktop/systemd1 org.freedesktop.systemd1.Manager.StartUnit \
+string:"plymouth-quit.service" string:"replace"
 
 # we can't maintain the environment with su, because we are logging in to a new session
 # so we need to manually pass in the environment variables to maintain, in a whitelist
@@ -67,6 +75,6 @@ environment=$(env | grep -v -w '_' | awk -F= '{ st = index($0,"=");print substr(
 environment="${environment::-1}"
 
 # launch Chromium and whitelist the enVars so that they pass through to the su session
-su -w "$environment" -c "export DISPLAY=:$DISPLAY_NUM && startx /usr/src/app/startx.sh $CURSOR" - chromium
+su -w "$environment" -c "cage -- /usr/src/app/startwayland.sh" - chromium
 
-sleep infinity
+# sleep infinity

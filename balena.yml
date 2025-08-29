@@ -1,11 +1,9 @@
-name: browser
+name: octo-browser
 description: >-
   a hardware accelerated web browser to present internal and external URLs on a
   connected display
 
 post-provisioning: >-
-  [![balena](https://github.com/balena-labs-projects/browser/actions/workflows/balena.yml/badge.svg)](https://github.com/balena-labs-projects/browser/actions/workflows/balena.yml)
-
   ## Usage instructions
 
   Include this snippet in your docker-compose.yml file under 'services':
@@ -38,11 +36,11 @@ assets:
   repository:
     type: blob.asset
     data:
-      url: 'https://github.com/balena-labs-projects/browser'
+      url: 'https://github.com/octopus-energy/balena-browser'
   logo:
     type: blob.asset
     data:
-      url: 'https://raw.githubusercontent.com/balena-labs-projects/browser/master/logo.png'
+      url: 'https://raw.githubusercontent.com/octopus-energy/balena-browser/master/logo.png'
 data:
   defaultDeviceType: raspberrypi3
   supportedDeviceTypes:

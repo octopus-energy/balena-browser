@@ -1,397 +1,299 @@
 #!/bin/env node
 
-const express = require('express');
-const bodyParser = require('body-parser');
-const chromeLauncher = require('chrome-launcher');
-const bent = require('bent')
+const express = require("express");
+const bodyParser = require("body-parser");
+const chromeLauncher = require("chrome-launcher");
+const CDP = require("chrome-remote-interface");
+const schedule = require("node-schedule");
+const bent = require("bent");
 const {
-  setIntervalAsync,
-  clearIntervalAsync
-} = require('set-interval-async/dynamic')
-const { spawn } = require('child_process');
-const { readFile, unlink } = require('fs').promises;
-const path = require('path');
-const os = require('os');
+    setIntervalAsync,
+    clearIntervalAsync,
+} = require("set-interval-async/dynamic");
+const { spawn } = require("child_process");
+const { readFile, unlink } = require("fs").promises;
+const path = require("path");
+const os = require("os");
+const fs = require("fs");
 
 // Bring in the static environment variables
 const API_PORT = parseInt(process.env.API_PORT) || 5011;
-const WINDOW_SIZE = process.env.WINDOW_SIZE || "800,600";
-const WINDOW_POSITION = process.env.WINDOW_POSITION || "0,0";
-const PERSISTENT_DATA = process.env.PERSISTENT || '0';
+const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
+const LAUNCH_URLS = (
+    process.env.LAUNCH_URL || "file:///home/chromium/index.html"
+).split(",");
+const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
+const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
+const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 1;
+const RELOAD_ON_ERROR_TIMER = (process.env.RELOAD_ON_ERROR_TIMER || 5) * 1000;
+const PERSISTENT_DATA = process.env.PERSISTENT || "0";
 const REMOTE_DEBUG_PORT = process.env.REMOTE_DEBUG_PORT || 35173;
 const FLAGS = process.env.FLAGS || null;
 const EXTRA_FLAGS = process.env.EXTRA_FLAGS || null;
-const HTTPS_REGEX = /^https?:\/\//i //regex for HTTP/S prefix
+const HTTPS_REGEX = /^https?:\/\//i; //regex for HTTP/S prefix
 const AUTO_REFRESH = process.env.AUTO_REFRESH || 0;
+const FLEET_NAME = process.env.BALENA_APP_NAME || "unknown-fleet";
+const DEVICE_NAME = process.env.BALENA_DEVICE_NAME_AT_INIT || "unknown-device";
+const SHOW_DEVICE_TAG = process.env.SHOW_DEVICE_TAG || "1";
+const OSD_CSS = parseJson(process.env.OSD_CSS);
+const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
+const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
 
 // Environment variables which can be overriden from the API
-let kioskMode = process.env.KIOSK || '0';
-let enableGpu = process.env.ENABLE_GPU || '0';
+let kioskMode = process.env.KIOSK || "0";
+let enableGpu = process.env.ENABLE_GPU || "0";
 
 let DEFAULT_FLAGS = [];
-let currentUrl = '';
+let currentUrl = "";
+let nextUrlIndex = 0;
 let flags = [];
 
 // Refresh timer object
 let timer = {};
+
+function parseJson(string) {
+    try {
+        return JSON.parse(string);
+    } catch (e) {
+        return undefined;
+    }
+}
 
 // Returns the URL to display, adhering to the hieracrchy:
 // 1) the configured LAUNCH_URL
 // 2) a discovered HTTP service on the device
 // 3) the default static HTML
 async function getUrlToDisplayAsync() {
-  let launchUrl = process.env.LAUNCH_URL || null;
-    if (null !== launchUrl)
-    {
-      console.log(`Using LAUNCH_URL: ${launchUrl}`)
-
-      // Prepend http:// if the LAUNCH_URL doesn't have it.
-      // This is needed for the --app flag to be used for kiosk mode
-      if (!HTTPS_REGEX.test(launchUrl)) {
-        launchUrl = `http://${launchUrl}`;
-      }
-
-      return launchUrl;
+    nextUrl = LAUNCH_URLS[nextUrlIndex++];
+    if (nextUrlIndex >= LAUNCH_URLS.length) {
+        nextUrlIndex = 0;
     }
+    let launchUrl = nextUrl || null;
+    if (null !== launchUrl) {
+        console.log(`Using LAUNCH_URL: ${launchUrl}`);
 
-    console.log("LAUNCH_URL environment variable not set.")
-    console.log("Looking for local HTTP/S services.")
-
-    // make a HTTP/S request for each supported port to the localhost
-    // add the URL to the array if HTTP200 is returned
-    let ports = [80,443,8080];
-    let returnURL = null;
-    let urls = []
-    for await (const port of ports) {
-      const protocol = 443 === port ? `https` : `http`;
-      const url = `${protocol}://localhost:${port}`;
-      try {
-        const request = bent(url);
-        const response = await request();
-        console.log(`Trying local port ${port}`)
-        if (200 == response.statusCode)
-        {
-          console.log("HTTP/S service found at: " + url)
-          urls.push(url)
+        // Prepend http:// if the LAUNCH_URL doesn't have it.
+        // This is needed for the --app flag to be used for kiosk mode
+        if (!HTTPS_REGEX.test(launchUrl)) {
+            launchUrl = `http://${launchUrl}`;
         }
-      }
-      catch(e)
-      {
-        //Nothing to do here, failure is expected when nothing
-        //is listening on a port
-        console.log(`No service found on port ${port}`);
-      }
+
+        return launchUrl;
     }
 
-    if(urls.length > 0)
-    {
-      // return the first URL that returned 200
-      returnURL = urls[0];
-    }
-    // Otherwise send the default HTML
-    else
-    {
-      console.log("Displaying default HTML page");
-      returnURL = "file:///home/chromium/index.html";
-    }
+    console.log("LAUNCH_URL environment variable not set.");
 
     return returnURL;
-  }
-       
+}
+
 // Launch the browser with the URL specified
-let launchChromium = async function(url) {
+let launchChromium = async function (url) {
     await chromeLauncher.killAll();
 
     flags = [];
     // If the user has set the flags, use them
-    if (null !== FLAGS)
-    {
-      flags = FLAGS.split(' ');
-    }
-    else
-    {
-      // User the default flags from chrome-launcher, plus our own.
-      flags = DEFAULT_FLAGS;
-      let balenaFlags = [
-        '--window-size=' + WINDOW_SIZE,
-        '--window-position=' + WINDOW_POSITION,
-        '--autoplay-policy=no-user-gesture-required',
-        '--noerrdialogs',
-        '--disable-session-crashed-bubble',
-        '--check-for-update-interval=31536000',
-        '--disable-dev-shm-usage', // TODO: work out if we can enable this for devices with >1Gb of memory
-      ];
-
-      // Merge the chromium default and balena default flags
-      flags = flags.concat(balenaFlags);
-
-      // either disable the gpu or set some flags to enable it
-      if (enableGpu != '1')
-      {
-        console.log("Disabling GPU");
-        flags.push('--disable-gpu');
-      }
-      else
-      {
-        console.log("Enabling GPU");
-        let gpuFlags = [
-          '--enable-zero-copy',
-          '--num-raster-threads=4',
-          '--ignore-gpu-blocklist',
-          '--enable-gpu-rasterization',
+    if (null !== FLAGS) {
+        flags = FLAGS.split(" ");
+    } else {
+        // User the default flags from chrome-launcher, plus our own.
+        flags = DEFAULT_FLAGS;
+        let balenaFlags = [
+            "--ozone-platform=wayland",
+            "--autoplay-policy=no-user-gesture-required",
+            "--noerrdialogs",
+            "--disable-session-crashed-bubble",
+            "--check-for-update-interval=31536000",
         ];
 
-        flags = flags.concat(gpuFlags);
-      }
+        // Merge the chromium default and balena default flags
+        flags = flags.concat(balenaFlags);
+
+        // either disable the gpu or set some flags to enable it
+        if (enableGpu != "1") {
+            console.log("Disabling GPU");
+            flags.push("--disable-gpu");
+        } else {
+            console.log("Enabling GPU");
+            let gpuFlags = [
+                "--enable-zero-copy",
+                "--num-raster-threads=4",
+                "--ignore-gpu-blocklist",
+                "--enable-gpu-rasterization",
+            ];
+
+            flags = flags.concat(gpuFlags);
+        }
     }
 
     if (EXTRA_FLAGS) {
-      flags = flags.concat(EXTRA_FLAGS.split(' '));
+        flags = flags.concat(EXTRA_FLAGS.split(" "));
     }
 
-    let startingUrl = url;
-    if ('1' === kioskMode)
-    {
-      console.log("Enabling KIOSK mode");
-      startingUrl = `--app= ${url}`;
-    }
-    else
-    {
-      console.log("Disabling KIOSK mode");
+    let startingUrl = "http://proxy:8080/nonproxied/unconfigured/";
+    if ("1" === kioskMode) {
+        console.log("Enabling KIOSK mode");
+        startingUrl = `--app= ${startingUrl}`;
+    } else {
+        console.log("Disabling KIOSK mode");
     }
 
     console.log(`Starting Chromium with flags: ${flags}`);
     console.log(`Displaying URL: ${startingUrl}`);
 
     const chrome = await chromeLauncher.launch({
-      startingUrl: startingUrl,
-      ignoreDefaultFlags: true,
-      chromeFlags: flags,
-      port: REMOTE_DEBUG_PORT,
-      connectionPollInterval: 1000,
-      maxConnectionRetries: 120,
-      userDataDir: '1' === PERSISTENT_DATA ? '/data/chromium' : undefined
+        startingUrl: startingUrl,
+        ignoreDefaultFlags: true,
+        chromeFlags: flags,
+        port: REMOTE_DEBUG_PORT,
+        connectionPollInterval: 1000,
+        maxConnectionRetries: 120,
+        userDataDir: "1" === PERSISTENT_DATA ? "/data/chromium" : undefined,
     });
-      
-    console.log(`Chromium remote debugging tools running on port: ${chrome.port}`);
+
+    console.log(
+        `Chromium remote debugging tools running on port: ${chrome.port}`
+    );
+    let client = null;
+    try {
+        client = await CDP({
+            port: REMOTE_DEBUG_PORT,
+        });
+
+        if (RELOAD_ON_ERROR !== 0) {
+            const { Network } = client;
+
+            try {
+                // Listen for network responses and refresh after 5 seconds if
+                // the main document finished loading with a non-success
+                // HTTP error code
+                Network.responseReceived(async (params) => {
+                    if (
+                        params.type === "Document" &&
+                        params.response.status > 399
+                    ) {
+                        console.log(
+                            `Document finished loading with HTTP error code ${params.response.status}`
+                        );
+                        setTimeout(async () => {
+                            await reloadPage(client);
+                        }, RELOAD_ON_ERROR_TIMER);
+                    }
+                });
+
+                await Network.enable();
+            } catch (err) {
+                console.error(`Could not set up Network events. Error: ${err}`);
+            }
+        }
+
+        // Go to the first URL now that CDP has beend loaded
+        // and Network events are being listened to
+        await goToUrl(client, url);
+    } catch (err) {
+        console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
+    }
     currentUrl = url;
+    return client;
+};
+async function goToUrl(cdpClient, url) {
+    console.log(`Navigating to URL: ${url}`);
+    try {
+        await cdpClient.Page.navigate({ url: url });
+    } catch (err) {
+        console.error(`Could not navigate to URL via CDP. Error: ${err}`);
+    }
+}
+
+async function reloadPage(cdpClient) {
+    console.log("Refreshing page.");
+    await goToUrl(cdpClient, LAUNCH_URLS[nextUrlIndex]);
 }
 
 // Get's the chrome-launcher default flags, minus the extensions and audio muting flags.
 async function SetDefaultFlags() {
-  DEFAULT_FLAGS =  await chromeLauncher.Launcher.defaultFlags().filter(flag => '--disable-extensions' !== flag && '--mute-audio' !== flag);
+    DEFAULT_FLAGS = await chromeLauncher.Launcher.defaultFlags().filter(
+        (flag) => "--disable-extensions" !== flag && "--mute-audio" !== flag
+    );
+}
+
+async function setExtensionStorage() {
+    const extensionConfig = {
+        balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
+        displayScale: DISPLAY_SCALE,
+        css: OSD_CSS,
+        fontSize: OSD_FONT_SIZE,
+        fontFamily: OSD_FONT_FAMILY,
+        showDeviceTag: SHOW_DEVICE_TAG,
+        reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
+    };
+    const jsonData = JSON.stringify(extensionConfig);
+
+    fs.writeFile(
+        "/usr/share/chromium/extensions/cosd_cat/config.json",
+        jsonData,
+        "utf8",
+        (err) => {
+            if (err) {
+                console.error("Error writing config to file", err);
+            } else {
+                console.log("Config written to file");
+            }
+        }
+    );
 }
 
 async function setTimer(interval) {
-  console.log("Auto refresh interval: ", interval);
-  timer = setIntervalAsync(
-    async () => {
-      try {
-        await launchChromium(currentUrl);
-      } catch (err) {
-        console.log("Timer error: ", err);
-        process.exit(1);
-      }
-    },
-    interval
-  )
-  
+    console.log("Auto refresh interval: ", interval);
+    timer = setIntervalAsync(async () => {
+        try {
+            await launchChromium(currentUrl);
+        } catch (err) {
+            console.log("Timer error: ", err);
+            process.exit(1);
+        }
+    }, interval);
 }
 
-async function clearTimer(){
-  await clearIntervalAsync(timer);
+async function clearTimer() {
+    await clearIntervalAsync(timer);
 }
 
-async function main(){
-  await SetDefaultFlags();
-  let url = await getUrlToDisplayAsync();
-  await launchChromium(url);
-  if (AUTO_REFRESH > 0)
-  {
-    await setTimer(AUTO_REFRESH * 1000);
-  }
-}
-
-
-main().catch(err => {
-  console.log("Main error: ", err);
-  process.exit(1);
-});
-
-// Start the API
-const app = express();
-
-const errorHandler = (err, req, res, next) => {
-  res.status(500);
-  res.render('API error: ', {
-    error: err
-  });
-};
-
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({
-  extended: true
-}));
-app.use(function(req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE');
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-});
-app.use(errorHandler);
-
-// ping endpoint
-app.get('/ping', (req, res) => {
-    
-    return res.status(200).send('ok');
-});
-
-// url set endpoint
-app.post('/url', (req, res) => {
-  if (!req.body.url) {
-    return res.status(400).send('Bad request: missing URL in the body element');
-  }
-
-  let url = req.body.url;
-
-  // prepend http prefix if necessary for kiosk mode to work
-  if (!HTTPS_REGEX.test(url)) {
-    url = 'http://' + url;
-  }
-
-  if (req.body.kiosk) {
-    kioskMode = req.body.kiosk;
-  }
-
-  if (req.body.gpu) {
-    enableGpu = req.body.gpu;
-  }
-
-  launchChromium(url);
-  return res.status(200).send('ok');
-});
-
-// url get endpoint
-app.get('/url', (req, res) => {
-    
-  return res.status(200).send(currentUrl);
-});
-
-// refresh endpoint
-app.post('/refresh', (req, res) => {
- 
-  launchChromium(currentUrl);
-  return res.status(200).send('ok');
-});
-
-// gpu set endpoint
-app.post('/gpu/:gpu', (req, res) => {
-  if (!req.params.gpu) {
-    return res.status(400).send('Bad Request');
-  }
-
-  if('1' !== req.params.gpu && '0' !== req.params.gpu)
-  {
-    return res.status(400).send('Bad Request');
-  }
-
-  enableGpu = req.params.gpu;
-  launchChromium(currentUrl);
-  return res.status(200).send('ok');
-});
-// gpu get endpoint
-app.get('/gpu', (req, res) => {
-    
-  return res.status(200).send(enableGpu.toString());
-});
-
-// kiosk set endpoint
-app.post('/kiosk/:kiosk', (req, res) => {
-  if (!req.params.kiosk) {
-    return res.status(400).send('Bad Request');
-  }
-
-  kioskMode = req.params.kiosk;
-  launchChromium(currentUrl);
-  return res.status(200).send('ok');
-});
-
-app.post('/autorefresh/:interval', async(req, res) => {
-  if (!req.params.interval) {
-    return res.status(400).send('Bad Request');
-  }
-
-  if(req.params.interval < 1)
-  {
-    await clearTimer();
-  }
-  else
-  {
-    await setTimer((req.params.interval * 1000))
-  }
-  
-  return res.status(200).send('ok');
-});
-
-// flags endpoint
-app.get('/flags', (req, res) => { 
-    
-  return res.status(200).send(flags.toString());
-});
-
-// kiosk get endpoint
-app.get('/kiosk', (req, res) => {
-    
-  return res.status(200).send(kioskMode.toString());
-});
-
-// version get endpoint
-app.get('/version', (req, res) => {
-  
-  let version = process.env.VERSION || "Version not set";
-  return res.status(200).send(version.toString());
-});
-
-app.get('/screenshot', async(req, res) => {
-  const fileName = process.hrtime.bigint() + '.png';
-  const filePath = path.join(os.tmpdir(), fileName);
-  try {
-    const child = spawn('scrot', [filePath]);
-
-    const statusCode = await new Promise( (res, rej) => { child.on('close', res); } );
-    if (statusCode != 0) {
-      return res.status(500).send("Screenshot command exited with non-zero return code.");
+async function main() {
+    await SetDefaultFlags();
+    await setExtensionStorage();
+    let url = await getUrlToDisplayAsync();
+    await launchChromium(url);
+    if (AUTO_REFRESH > 0) {
+        await setTimer(AUTO_REFRESH * 1000);
     }
+    const cdpClient = await launchChromium(url);
 
-    const fileContents = await readFile(filePath);
-    res.set('Content-Type', 'image/png');
-    return res.status(200).send(fileContents);
-  } catch(e) {
-    console.log(e.toString());
-    return res.status(500).send("Error occurred in screenshot code.");
-  } finally {
-    try {
-      await unlink(filePath);
-    } catch (e) {
-      console.log(e)
+    if (cdpClient != null) {
+        if (LAUNCH_URLS.length > 1 && ROTATE_SCHEDULE !== 0) {
+            schedule.scheduleJob(ROTATE_SCHEDULE, async () => {
+                let url = await getUrlToDisplayAsync();
+                await goToUrl(cdpClient, url);
+            });
+        }
+
+        if (REFRESH_SCHEDULE !== 0) {
+            schedule.scheduleJob(
+                REFRESH_SCHEDULE,
+                async () => await reloadPage(cdpClient)
+            );
+        }
+    } else {
+        console.log(
+            "WARNING - CDP client is null and so refresh and rotate schedules are not available."
+        );
     }
-  }
-});
+}
 
-// scan endpoint - causes the device to rescan for local HTTP services
-app.post('/scan', (req, res) => {
- 
-  main().catch(err => {
-    console.log("Scan error: ", err);
+main().catch((err) => {
+    console.log("Main error: ", err);
     process.exit(1);
-  });
-  return res.status(200).send('ok');
 });
 
-app.listen(API_PORT, () => {
-  console.log('Browser API running on port: ' + API_PORT);
-});
-
-process.on('SIGINT', () => {
-  process.exit();
+process.on("SIGINT", () => {
+    process.exit();
 });
