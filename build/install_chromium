@@ -38,15 +38,12 @@ fi
 apt-get update && apt-get install -y  --no-install-recommends \
     ${CHROMIUM_PACKAGE} \
     chromium-common \
-    libgles2-mesa \
     lsb-release \
     mesa-vdpau-drivers \
-    scrot \
-    x11-xserver-utils \
-    xserver-xorg-input-evdev \
-    xserver-xorg-legacy \
-    xserver-xorg-video-fbdev \
-    xserver-xorg xinit \
-    xinput \
-    xterm && \
+    grim \
+    cage \
+    udev \
+    initscripts \
+    jq \
+    wlr-randr && \
     rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*

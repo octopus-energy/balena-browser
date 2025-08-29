@@ -1,0 +1,14 @@
+{
+    "name": "cosd_cat",
+    "description": "Display a message on the webpage",
+    "version": "0.1",
+    "manifest_version": 3,
+    "content_scripts": [
+        {
+            "js": ["scripts/content.js"],
+            "matches": ["*://*/*"]
+        }
+    ],
+    "permissions": ["storage"],
+    "host_permissions": ["*://*/*"]
+}
