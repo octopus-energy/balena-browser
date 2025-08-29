@@ -77,22 +77,23 @@ The following environment variables allow configuration of the `browser` block:
 | Environment variable | Options | Default | Description |
 | --- | --- | --- | --- |
 |`LAUNCH_URL`|`http` or `https` URL|N\A|Web page to display|
+|`ROTATE_SCHEDULE`|cron expression or `0` to disable|`0`|cron expression to schedule the next LAUNCH_URL in the comma separated list|
+|`REFRESH_SCHEDULE`|cron expression or `0` to disable|`0`|cron expression to schedule page refreshes|
 |`DISPLAY_NUM`|`n`|0|Display number to use|
 |`LOCAL_HTTP_DELAY`|Number (seconds)|0|Number of seconds to wait for a local HTTP service to start before trying to detect it|
 |`KIOSK`|`0`, `1`|`0`|Run in kiosk mode with no menus or status bars. <br/> `0` = off, `1` = on|
-|`SHOW_CURSOR`|`0`, `1`|`0`|Enables/disables the cursor when in kiosk mode<br/> `0` = off, `1` = on|
 |`FLAGS`|[many!](https://peter.sh/experiments/chromium-command-line-switches/)|N/A|**Replaces** the flags chromium is started with. Enter a space (\' \') separated list of flags (e.g. `--noerrdialogs --disable-session-crashed-bubble`) <br/> **Use with caution!**|
 |`EXTRA_FLAGS`|[many!](https://peter.sh/experiments/chromium-command-line-switches/)|N/A|Adds **additional** flags chromium is started with. Enter a space (\' \') separated list of flags (e.g. `--audio-buffer-size=2048 --audio-output-channels=8`)|
 |`PERSISTENT`|`0`, `1`|`0`|Enables/disables user profile data being stored on the device. **Note: you'll need to create a settings volume. See example above** <br/> `0` = off, `1` = on|
-|`ROTATE_DISPLAY`|`normal`, `left`, `right`, `inverted`|`normal`|Rotates the display|
-|`ROTATE_DELAY`|`n`|`3`|Add an artificial delay (in seconds) before applying display rotation|
-|`TOUCHSCREEN`|`string`|N\A|Name of Touch Input to rotate|
+|`ROTATE_DISPLAY`|`normal`, `90`, `180`, `270`|`normal`|Rotates the display|
 |`ENABLE_GPU`|`0`, `1`|0|Enables the GPU rendering. Necessary for Pi3B+ to display YouTube videos. <br/> `0` = off, `1` = on|
-|`WINDOW_SIZE`|`x,y`|Detected screen resolution|Sets the browser window size, such as `800,600`. <br/> **Note:** Reverse the dimensions if you also rotate the display to `left` or `right` |
-|`WINDOW_POSITION`|`x,y`|`0,0`|Specifies the browser window position on the screen|
 |`API_PORT`|port number|5011|Specifies the port number the API runs on|
 |`REMOTE_DEBUG_PORT`|port number|35173|Specifies the port number the chrome remote debugger runs on|
 |`AUTO_REFRESH`|interval|0 (disabled)|Specifies the number of seconds before the page automatically refreshes|
+|`OSD_FONT_FAMILY`|css font family|helvetica|Specifies the value used in the `font-family` property for the OSD device name tag|
+|`OSD_FONT_SIZE`|css size|18px|Specifies the value used in the `font-size` css property for the OSD device name tag|
+|`OSD_CSS`|object|`{}`|Object holding key-value pairs for css property names and values to be applied to the OSD device name tag|
+|`SHOW_DEVICE_TAG`|`0`, `1`|`1`|Used to hide the device tag. Useful for full screen video playback|
 
 ---
 

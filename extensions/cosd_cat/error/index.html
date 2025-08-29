@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" style="background: #180048">
+    <head>
+        <meta charset="utf-8" />
+        <style media="screen">
+            @font-face {
+                font-family: Gotham;
+                font-style: normal;
+                font-weight: 300;
+                src: url("fonts/GothamSSm-Light.woff2") format("woff2");
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: Gotham;
+                font-style: normal;
+                font-weight: 400;
+                src: url("fonts/GothamSSm-Book.woff2") format("woff2");
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: Gotham;
+                font-style: normal;
+                font-weight: 500;
+                src: url("fonts/GothamSSm-Medium.woff2") format("woff2");
+                font-display: swap;
+            }
+
+            @font-face {
+                font-family: Gotham;
+                font-style: normal;
+                font-weight: 800;
+                src: url("fonts/GothamSSm-Bold.woff2") format("woff2");
+                font-display: swap;
+            }
+
+            html {
+                font-size: 62.5%;
+            }
+
+            body {
+                height: 100vh;
+                width: 100wh;
+                background: #180048;
+                overflow: hidden;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                flex-direction: column;
+
+                font-family: Gotham, helvetica, arial, sans-serif;
+                font-size: 18px;
+                font-size: 1.8rem;
+                font-style: normal;
+                font-weight: 300;
+                line-height: 27px;
+                line-height: 2.7rem;
+                -moz-osx-font-smoothing: grayscale;
+                -webkit-font-smoothing: antialiased;
+                color: white;
+            }
+
+            .container {
+                display: flex;
+                flex-direction: row;
+                justify-content: center;
+                align-items: center;
+                height: auto;
+                width: 80%;
+            }
+
+            .image_area {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: auto;
+                /* increase the size of the image here */
+                z-index: 1;
+                width: 70%;
+            }
+
+            .text_area {
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                height: auto;
+                width: auto;
+
+                z-index: 2;
+                width: 80%;
+            }
+
+            h1 {
+                font-size: 5em;
+                font-weight: 700;
+            }
+
+            h3 {
+                font-size: 1.5em;
+                color: #60f0f8;
+                font-weight: 500;
+            }
+
+            h4 {
+                margin: 10px 0;
+                line-height: 1.6em;
+                font-size: 1.2em;
+                font-weight: 300;
+            }
+
+            a {
+                font-weight: 400;
+                text-decoration: none;
+                color: white;
+                font-style: italic;
+            }
+
+            .dashboard_identifier {
+                background-color: #60f0f8;
+                color: #180048;
+                border: #60f0f8;
+                border-width: 1px;
+                font-weight: 700;
+                border-style: solid;
+                display: inline-block;
+                padding: 0.1em;
+            }
+
+            #errorDetails {
+                background-color: black;
+                color: white;
+                font-family: monospace;
+                padding: 10px;
+            }
+        </style>
+    </head>
+
+    <body>
+        <div class="container">
+            <div class="image_area">
+                <img
+                    style="max-width: 80%; max-height: 100%"
+                    src="/error/constantine_ouch.png"
+                />
+            </div>
+            <div class="text_area">
+                <div class="header">
+                    <h1>Oops!</h1>
+                </div>
+                <div class="sub_header">
+                    <h3>This dashboard is having trouble connecting.</h3>
+                    <h4>
+                        We'll keep retrying, but if this page doesn't go away in
+                        a few minutes, please get in touch over Slack in
+                        #techops-help and provide this dashboard identifier
+                        along with the error details below:
+                    </h4>
+                    <h4 class="dashboard_identifier" id="screenIdentifier"></h4>
+                </div>
+                <div>
+                    <strong>Error details:</strong>
+                    <p id="errorDetails"></p>
+                    <p id="countdown"></p>
+                </div>
+            </div>
+        </div>
+        <script src="../scripts/error.js" type="module"></script>
+        <script src="../scripts/content.js" type="module"></script>
+    </body>
+</html>
