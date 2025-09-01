@@ -35,6 +35,6 @@
         "debug": "^4.1.1",
         "express": "^4.17.1",
         "node-schedule": "^2.1.1",
-        "set-interval-async": "^1.0.34"
+        "set-interval-async": "^3.0.3"
     }
 }
