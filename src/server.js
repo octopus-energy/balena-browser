@@ -7,9 +7,9 @@ const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
 const LAUNCH_URLS = (
-    process.env.LAUNCH_URL || "chrome-extension://ljnalmhbggcggncjbchegchjcdockndi/pages/unconfigured/index.html"
+    process.env.LAUNCH_URL ||
+    "chrome-extension://ljnalmhbggcggncjbchegchjcdockndi/pages/unconfigured/index.html"
 ).split(",");
-const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
 const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 0;
@@ -22,6 +22,10 @@ const FLEET_NAME = process.env.BALENA_APP_NAME || "unknown-fleet";
 const DEVICE_NAME = process.env.BALENA_DEVICE_NAME_AT_INIT || "unknown-device";
 const SHOW_DEVICE_TAG = process.env.SHOW_DEVICE_TAG || "1";
 const OSD_CSS = parseJson(process.env.OSD_CSS);
+const ADD_HEADERS = validateHeaders(parseJson(process.env.ADD_HEADERS));
+const UPSTREAM_URL = process.env.UPSTREAM_URL;
+const AUTH_HEADER_KEY = process.env.AUTH_HEADER_KEY;
+const AUTH_HEADER_VALUE = process.env.AUTH_HEADER_VALUE;
 const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
 const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
 const SHOW_CURSOR = process.env.SHOW_CURSOR || "0";
@@ -42,6 +46,27 @@ function parseJson(string) {
     }
 }
 
+// checks if we have the headers needed to proxy requests in Chrome
+function validateHeaders(addHeaders) {
+    const wantedKeys = ["upstreamUrl", "authHeaderKey", "authHeaderValue"];
+
+    try {
+        return addHeaders.filter((addHeader) => {
+            return wantedKeys.every((wantedKey) => {
+                if (Object.keys(addHeader).includes(wantedKey)) {
+                    return true;
+                } else {
+                    console.log(`${wantedKey} not in addHeader object, ignoring entry`);
+                    return false;
+                }
+            });
+        });
+    } catch (e) {
+        console.log(`Error parsing ADD_HEADERS: ${e}`)
+        return [];
+    }
+}
+
 // Returns the URL to display, adhering to the hieracrchy:
 // 1) the configured LAUNCH_URL
 // 2) the default static HTML
@@ -58,7 +83,7 @@ function getUrlToDisplay() {
 
 // Launch the browser with the URL specified
 let launchChromium = async function () {
-    let url = "file:///home/chromium/loading.html"
+    let url = "file:///home/chromium/loading.html";
     await chromeLauncher.killAll();
 
     flags = [];
@@ -183,7 +208,19 @@ async function SetDefaultFlags() {
     );
 }
 
+// if any additional headers are set, we should add them to the array
+function addArbitraryHeaders() {
+    if (UPSTREAM_URL && AUTH_HEADER_KEY && AUTH_HEADER_VALUE) {
+        ADD_HEADERS.push({
+            upstreamUrl: UPSTREAM_URL,
+            authHeaderKey: AUTH_HEADER_KEY,
+            authHeaderValue: AUTH_HEADER_VALUE
+        })
+    }
+}
+
 async function setExtensionStorage(startingUrl) {
+    addArbitraryHeaders();
     const extensionConfig = {
         balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
         displayScale: DISPLAY_SCALE,
@@ -192,9 +229,9 @@ async function setExtensionStorage(startingUrl) {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
-        upstreamUrl: UPSTREAM_URL,
         startingUrl: startingUrl,
-        showCursor: SHOW_CURSOR
+        showCursor: SHOW_CURSOR,
+        addHeaders: ADD_HEADERS,
     };
     const jsonData = JSON.stringify(extensionConfig);
 
@@ -211,7 +248,6 @@ async function setExtensionStorage(startingUrl) {
         }
     );
 }
-
 
 async function main() {
     let url = getUrlToDisplay();
