@@ -17,6 +17,9 @@ const LAUNCH_URLS = (
     process.env.LAUNCH_URL || "file:///home/chromium/index.html"
 ).split(",");
 const UPSTREAM_URL = process.env.UPSTREAM_URL;
+const AUTH_HEADER_KEY = process.env.AUTH_HEADER_KEY;
+const AUTH_HEADER_VALUE = process.env.AUTH_HEADER_VALUE;
+const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
 const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 1;
@@ -205,7 +208,9 @@ async function setExtensionStorage() {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
-        upstreamUrl: UPSTREAM_URL
+        upstreamUrl: UPSTREAM_URL,
+        authHeaderKey: AUTH_HEADER_KEY,
+        authHeaderValue: AUTH_HEADER_VALUE,
     };
     const jsonData = JSON.stringify(extensionConfig);
 
