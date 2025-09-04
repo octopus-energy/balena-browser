@@ -10,7 +10,7 @@
             "run_at": "document_start"
         }
     ],
-    "permissions": ["storage", "webRequest"],
+    "permissions": ["storage", "webRequest", "declarativeNetRequest"],
     "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "scripts/service-worker.js"
