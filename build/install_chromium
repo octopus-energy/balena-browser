@@ -35,6 +35,7 @@ apt-get update && apt-get install -y  --no-install-recommends \
     grim \
     fonts-noto \
     fonts-noto-color-emoji \
+    mpv \
     weston \
     seatd \
     udev \
