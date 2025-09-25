@@ -1,27 +1,22 @@
 #!/bin/env node
 
-const express = require("express");
-const bodyParser = require("body-parser");
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
 const schedule = require("node-schedule");
-const bent = require("bent");
 const {
     setIntervalAsync,
     clearIntervalAsync,
 } = require("set-interval-async/dynamic");
-const { spawn } = require("child_process");
 const { readFile, unlink } = require("fs").promises;
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
 
-// Bring in the static environment variables
-const API_PORT = parseInt(process.env.API_PORT) || 5011;
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
 const LAUNCH_URLS = (
     process.env.LAUNCH_URL || "file:///home/chromium/index.html"
 ).split(",");
+const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
 const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 1;
@@ -30,8 +25,6 @@ const PERSISTENT_DATA = process.env.PERSISTENT || "0";
 const REMOTE_DEBUG_PORT = process.env.REMOTE_DEBUG_PORT || 35173;
 const FLAGS = process.env.FLAGS || null;
 const EXTRA_FLAGS = process.env.EXTRA_FLAGS || null;
-const HTTPS_REGEX = /^https?:\/\//i; //regex for HTTP/S prefix
-const AUTO_REFRESH = process.env.AUTO_REFRESH || 0;
 const FLEET_NAME = process.env.BALENA_APP_NAME || "unknown-fleet";
 const DEVICE_NAME = process.env.BALENA_DEVICE_NAME_AT_INIT || "unknown-device";
 const SHOW_DEVICE_TAG = process.env.SHOW_DEVICE_TAG || "1";
@@ -61,29 +54,16 @@ function parseJson(string) {
 
 // Returns the URL to display, adhering to the hieracrchy:
 // 1) the configured LAUNCH_URL
-// 2) a discovered HTTP service on the device
-// 3) the default static HTML
-async function getUrlToDisplayAsync() {
+// 2) the default static HTML
+function getUrlToDisplay() {
     nextUrl = LAUNCH_URLS[nextUrlIndex++];
     if (nextUrlIndex >= LAUNCH_URLS.length) {
         nextUrlIndex = 0;
     }
-    let launchUrl = nextUrl || null;
-    if (null !== launchUrl) {
-        console.log(`Using LAUNCH_URL: ${launchUrl}`);
 
-        // Prepend http:// if the LAUNCH_URL doesn't have it.
-        // This is needed for the --app flag to be used for kiosk mode
-        if (!HTTPS_REGEX.test(launchUrl)) {
-            launchUrl = `http://${launchUrl}`;
-        }
+    console.log(`Next URL: ${nextUrl}`);
 
-        return launchUrl;
-    }
-
-    console.log("LAUNCH_URL environment variable not set.");
-
-    return returnURL;
+    return nextUrl;
 }
 
 // Launch the browser with the URL specified
@@ -132,7 +112,7 @@ let launchChromium = async function (url) {
     let startingUrl = "http://proxy:8080/nonproxied/unconfigured/";
     if ("1" === kioskMode) {
         console.log("Enabling KIOSK mode");
-        startingUrl = `--app= ${startingUrl}`;
+        startingUrl = `--app=${startingUrl}`;
     } else {
         console.log("Disabling KIOSK mode");
     }
@@ -158,7 +138,7 @@ let launchChromium = async function (url) {
         client = await CDP({
             port: REMOTE_DEBUG_PORT,
         });
-
+        console.log(`Connected to Chrome via CDP!`);
         if (RELOAD_ON_ERROR !== 0) {
             const { Network } = client;
 
@@ -225,6 +205,7 @@ async function setExtensionStorage() {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
+        upstreamUrl: UPSTREAM_URL
     };
     const jsonData = JSON.stringify(extensionConfig);
 
@@ -242,36 +223,17 @@ async function setExtensionStorage() {
     );
 }
 
-async function setTimer(interval) {
-    console.log("Auto refresh interval: ", interval);
-    timer = setIntervalAsync(async () => {
-        try {
-            await launchChromium(currentUrl);
-        } catch (err) {
-            console.log("Timer error: ", err);
-            process.exit(1);
-        }
-    }, interval);
-}
-
-async function clearTimer() {
-    await clearIntervalAsync(timer);
-}
 
 async function main() {
     await SetDefaultFlags();
     await setExtensionStorage();
-    let url = await getUrlToDisplayAsync();
-    await launchChromium(url);
-    if (AUTO_REFRESH > 0) {
-        await setTimer(AUTO_REFRESH * 1000);
-    }
+    let url =   getUrlToDisplay();
     const cdpClient = await launchChromium(url);
 
     if (cdpClient != null) {
         if (LAUNCH_URLS.length > 1 && ROTATE_SCHEDULE !== 0) {
             schedule.scheduleJob(ROTATE_SCHEDULE, async () => {
-                let url = await getUrlToDisplayAsync();
+                let url = await getUrlToDisplay();
                 await goToUrl(cdpClient, url);
             });
         }
@@ -294,6 +256,8 @@ main().catch((err) => {
     process.exit(1);
 });
 
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
+    // Stop all scheduled jobs
+    await schedule.gracefulShutdown();
     process.exit();
 });

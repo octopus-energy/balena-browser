@@ -75,6 +75,4 @@ environment=$(env | grep -v -w '_' | awk -F= '{ st = index($0,"=");print substr(
 environment="${environment::-1}"
 
 # launch Chromium and whitelist the enVars so that they pass through to the su session
-su -w "$environment" -c "cage -- /usr/src/app/startwayland.sh" - chromium
-
-# sleep infinity
+su -w "$environment" -c "cage -- /usr/src/app/startchromium.sh" - chromium
