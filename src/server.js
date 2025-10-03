@@ -7,7 +7,7 @@ const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
 const LAUNCH_URLS = (
-    process.env.LAUNCH_URL || "file:///home/chromium/unconfigured/index.html"
+    process.env.LAUNCH_URL || "chrome-extension://ljnalmhbggcggncjbchegchjcdockndi/pages/unconfigured/index.html"
 ).split(",");
 const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
@@ -56,7 +56,8 @@ function getUrlToDisplay() {
 }
 
 // Launch the browser with the URL specified
-let launchChromium = async function (url) {
+let launchChromium = async function () {
+    let url = "file:///home/chromium/loading.html"
     await chromeLauncher.killAll();
 
     flags = [];
@@ -180,7 +181,7 @@ async function SetDefaultFlags() {
     );
 }
 
-async function setExtensionStorage() {
+async function setExtensionStorage(startingUrl) {
     const extensionConfig = {
         balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
         displayScale: DISPLAY_SCALE,
@@ -189,7 +190,8 @@ async function setExtensionStorage() {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
-        upstreamUrl: UPSTREAM_URL
+        upstreamUrl: UPSTREAM_URL,
+        startingUrl: startingUrl
     };
     const jsonData = JSON.stringify(extensionConfig);
 
@@ -209,10 +211,10 @@ async function setExtensionStorage() {
 
 
 async function main() {
+    let url = getUrlToDisplay();
     await SetDefaultFlags();
-    await setExtensionStorage();
-    let url =   getUrlToDisplay();
-    const cdpClient = await launchChromium(url);
+    await setExtensionStorage(url);
+    const cdpClient = await launchChromium();
 
     if (cdpClient != null) {
         if (LAUNCH_URLS.length > 1 && ROTATE_SCHEDULE !== 0) {

@@ -76,6 +76,10 @@ function start_chromium() {
     node /usr/src/app/server.js
 }
 
+# set the device tag directly in the loading html in case the extension
+# doesn't load
+sed -i "s/unconfigured/$BALENA_APP_NAME\/$BALENA_DEVICE_NAME_AT_INIT/g" /home/chromium/loading.html
+
 # translate old style transform values into degree rotations
 case $ROTATE_DISPLAY in
     left)
