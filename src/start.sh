@@ -74,22 +74,6 @@ environment=$(env | grep -v -w '_' | awk -F= '{ st = index($0,"=");print substr(
 # remove the last comma
 environment="${environment::-1}"
 
-VIDEO_EXTENSIONS=".webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.viv|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.fl|.f4|.f4|.f4|.f4b"
-YOUTUBE_DOMAINS="youtu.be|youtube.com"
-
-if [[ $FORCE_MPV != 0 ]] && \
-   [[ $LAUNCH_URL =~ ($VIDEO_EXTENSIONS)$ ]] || \
-   [[ $LAUNCH_URL =~ ($YOUTUBE_DOMAINS) ]] || \
-   [[ $FORCE_MPV == 1 ]] 
-then
-    echo "Video, using mpv to play it"
-
-    /usr/src/app/setupmpv.sh
-    su -w "$environment" -c "cage -- /usr/src/app/startmpv.sh" - chromium
-else
-    echo "Not a video, launching Chromium"
-    su -w "$environment" -c "cage -- /usr/src/app/startchromium.sh" - chromium
-fi
 
 # launch Chromium and whitelist the enVars so that they pass through to the su session
-su -w "$environment" -c "cage -- /usr/src/app/startchromium.sh" - chromium
+su -w "$environment" -c "cage -- /usr/src/app/startcage.sh" - chromium

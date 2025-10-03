@@ -29,7 +29,7 @@ async function onResponseStarted(details) {
 
     ) {
         tabErrors[details.tabId] = details;
-        await chrome.tabs.update(details.tabId, { url: "error/index.html" });
+        await chrome.tabs.update(details.tabId, { url: "pages/error/index.html" });
     }
 }
 
@@ -41,6 +41,6 @@ async function onErrorOccurred(details) {
         details.error != "net::ERR_ABORTED"
     ) {
         tabErrors[details.tabId] = details;
-        await chrome.tabs.update(details.tabId, { url: "error/index.html" });
+        await chrome.tabs.update(details.tabId, { url: "pages/error/index.html" });
     }
 }

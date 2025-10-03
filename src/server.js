@@ -3,18 +3,11 @@
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
 const schedule = require("node-schedule");
-const {
-    setIntervalAsync,
-    clearIntervalAsync,
-} = require("set-interval-async/dynamic");
-const { readFile, unlink } = require("fs").promises;
-const path = require("path");
-const os = require("os");
 const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
 const LAUNCH_URLS = (
-    process.env.LAUNCH_URL || "file:///home/chromium/index.html"
+    process.env.LAUNCH_URL || "file:///home/chromium/unconfigured/index.html"
 ).split(",");
 const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
@@ -37,12 +30,8 @@ let kioskMode = process.env.KIOSK || "0";
 let enableGpu = process.env.ENABLE_GPU || "0";
 
 let DEFAULT_FLAGS = [];
-let currentUrl = "";
 let nextUrlIndex = 0;
 let flags = [];
-
-// Refresh timer object
-let timer = {};
 
 function parseJson(string) {
     try {
@@ -109,19 +98,18 @@ let launchChromium = async function (url) {
         flags = flags.concat(EXTRA_FLAGS.split(" "));
     }
 
-    let startingUrl = "http://proxy:8080/nonproxied/unconfigured/";
     if ("1" === kioskMode) {
         console.log("Enabling KIOSK mode");
-        startingUrl = `--app=${startingUrl}`;
+        url = `--app=${url}`;
     } else {
         console.log("Disabling KIOSK mode");
     }
 
     console.log(`Starting Chromium with flags: ${flags}`);
-    console.log(`Displaying URL: ${startingUrl}`);
+    console.log(`Displaying URL: ${url}`);
 
     const chrome = await chromeLauncher.launch({
-        startingUrl: startingUrl,
+        startingUrl: url,
         ignoreDefaultFlags: true,
         chromeFlags: flags,
         port: REMOTE_DEBUG_PORT,
@@ -165,10 +153,6 @@ let launchChromium = async function (url) {
                 console.error(`Could not set up Network events. Error: ${err}`);
             }
         }
-
-        // Go to the first URL now that CDP has beend loaded
-        // and Network events are being listened to
-        await goToUrl(client, url);
     } catch (err) {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }

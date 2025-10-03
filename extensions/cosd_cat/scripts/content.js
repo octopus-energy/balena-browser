@@ -1,5 +1,9 @@
 const cat = document.createElement("div");
-const errorPage = window.location.href.includes(chrome.runtime.id + "/error");
+const fillTagElement =
+    window.location.href.includes(chrome.runtime.id + "/pages/error") ||
+    window.location.href.includes(
+        "file:///home/chromium/unconfigured/index.html"
+    );
 
 cat.style.cssText = `
 position: fixed;
@@ -40,15 +44,19 @@ async function setOSD(config) {
 
         document.body.append(cat);
 
-        if (errorPage) {
+        if (fillTagElement) {
             document.getElementById("screenIdentifier").innerHTML =
                 config.balenaId;
         }
     }
 }
 
-fetch(chrome.runtime.getURL("config.json")).then((resp) => {
-    resp.json().then((config) => {
-        setOSD(config);
+fetch(chrome.runtime.getURL("config.json"))
+    .then((resp) => {
+        resp.json().then((config) => {
+            setOSD(config);
+        });
+    })
+    .catch((e) => {
+        console.log(e);
     });
-}).catch((e) => {console.log(e)});
