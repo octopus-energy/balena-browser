@@ -1,9 +1,11 @@
 const cat = document.createElement("div");
 const fillTagElement =
     window.location.href.includes(chrome.runtime.id + "/pages/error") ||
-    window.location.href.includes(
-        "file:///home/chromium/unconfigured/index.html"
-    );
+    window.location.href.includes(chrome.runtime.id + "/pages/unconfigured");
+
+const startPage = window.location.href.includes(
+    "file:///home/chromium/loading.html"
+);
 
 cat.style.cssText = `
 position: fixed;
@@ -51,10 +53,22 @@ async function setOSD(config) {
     }
 }
 
+function updateLocation(location) {
+    chrome.runtime.sendMessage(chrome.runtime.id, {
+        type: "updateLocation",
+        url: location,
+    });
+}
+
 fetch(chrome.runtime.getURL("config.json"))
     .then((resp) => {
         resp.json().then((config) => {
-            setOSD(config);
+            if (startPage) {
+                console.log(`Redirecting to ${config.startingUrl}`);
+                updateLocation(config.startingUrl);
+            } else {
+                setOSD(config);
+            }
         });
     })
     .catch((e) => {
