@@ -73,31 +73,31 @@ function start_chromium() {
     export VERSION=`chromium --version`
     echo "Installed browser version: $VERSION"
 
-    node /usr/src/app/server.js
+    cage -- node /usr/src/app/server.js
+
+    # translate old style transform values into degree rotations
+    case $ROTATE_DISPLAY in
+        left)
+            ROTATE_DISPLAY="270";;
+        right)
+            ROTATE_DISPLAY="90";;
+        inverted)
+            ROTATE_DISPLAY="180";;
+    esac
+
+    # get the names of connected screens and store them in an array
+    IFS='\n'
+    SCREENS=$(wlr-randr --json | jq -r '.[].name')
+    unset IFS
+
+    # set the screen rotation to normal if ROTATE_DISPLAY is unset
+    if [ -z "${ROTATE_DISPLAY}" ]; then ROTATE_DISPLAY="normal"; fi
+
+    # set the correct scale & transformation for each display
+    for SCREEN in "${SCREENS[@]}"; do
+        wlr-randr --output "${SCREEN}" --scale "${DISPLAY_SCALE}" --transform "${ROTATE_DISPLAY}"
+    done
 }
-
-# translate old style transform values into degree rotations
-case $ROTATE_DISPLAY in
-    left)
-        ROTATE_DISPLAY="270";;
-    right)
-        ROTATE_DISPLAY="90";;
-    inverted)
-        ROTATE_DISPLAY="180";;
-esac
-
-# get the names of connected screens and store them in an array
-IFS='\n'
-SCREENS=$(wlr-randr --json | jq -r '.[].name')
-unset IFS
-
-# set the screen rotation to normal if ROTATE_DISPLAY is unset
-if [ -z "${ROTATE_DISPLAY}" ]; then ROTATE_DISPLAY="normal"; fi
-
-# set the correct scale & transformation for each display
-for SCREEN in "${SCREENS[@]}"; do
-    wlr-randr --output "${SCREEN}" --scale "${DISPLAY_SCALE}" --transform "${ROTATE_DISPLAY}"
-done
 
 VIDEO_EXTENSIONS=".webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.viv|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.fl|.f4|.f4|.f4|.f4b"
 YOUTUBE_DOMAINS="youtu.be|youtube.com"
