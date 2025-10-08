@@ -3,7 +3,7 @@ var countdownTimer;
 var errorDetails;
 
 chrome.runtime
-    .sendMessage(chrome.runtime.id, "errorDetails")
+    .sendMessage(chrome.runtime.id, {type: "errorDetails"})
     .then((receivedErrorDetails) => {
         errorDetails = receivedErrorDetails
         const errorDetailsElement = document.getElementById("errorDetails");
