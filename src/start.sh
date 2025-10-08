@@ -76,4 +76,4 @@ environment="${environment::-1}"
 
 
 # launch Chromium and whitelist the enVars so that they pass through to the su session
-su -w "$environment" -c "cage -- /usr/src/app/startcage.sh" - chromium
+su -w "$environment" -c "/usr/src/app/userstart.sh" - chromium
