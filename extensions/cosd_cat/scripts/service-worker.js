@@ -8,8 +8,10 @@ fetch(chrome.runtime.getURL("config.json")).then((resp) => {
 }).catch((e) => {console.log(e)});
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-    if (request == "errorDetails") {
+    if (request.type == "errorDetails") {
         sendResponse(tabErrors[sender.tab.id]);
+    } else if (request.type == "updateLocation") {
+        chrome.tabs.update(sender.tab.id, { url: request.url });
     }
 });
 
