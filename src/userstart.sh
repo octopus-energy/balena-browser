@@ -25,6 +25,10 @@ function start_mpv() {
     echo "SHOW_DEVICE_TAG is set to ${SHOW_DEVICE_TAG}, not showing device tag."
     fi
 
+    if ((ROTATE_DISPLAY > 0 && ROTATE_DISPLAY <= 359)); then
+        MPV_ROTATE="--video-rotate=${ROTATE_DISPLAY}"
+    fi
+
     while true; do
         set -o pipefail # capture mpv's exit code, not tee's
 
@@ -38,6 +42,7 @@ function start_mpv() {
             --quiet \
             --vo=gpu \
             --ao=alsa \
+            $MPV_ROTATE \
             $MPV_OSD_CONFIG \
             $EXTRA_MPV_FLAGS \
             $VIDEO_URL 2>&1 | tee mpv.log &
@@ -75,16 +80,6 @@ function start_chromium() {
 
     cage -- node /usr/src/app/server.js
 
-    # translate old style transform values into degree rotations
-    case $ROTATE_DISPLAY in
-        left)
-            ROTATE_DISPLAY="270";;
-        right)
-            ROTATE_DISPLAY="90";;
-        inverted)
-            ROTATE_DISPLAY="180";;
-    esac
-
     # get the names of connected screens and store them in an array
     IFS='\n'
     SCREENS=$(wlr-randr --json | jq -r '.[].name')
@@ -99,6 +94,15 @@ function start_chromium() {
     done
 }
 
+# translate old style transform values into degree rotations
+case $ROTATE_DISPLAY in
+    left)
+        ROTATE_DISPLAY="270";;
+    right)
+        ROTATE_DISPLAY="90";;
+    inverted)
+        ROTATE_DISPLAY="180";;
+esac
 # set the device tag directly in the loading html in case the extension
 # doesn't load
 sed -i "s/unconfigured/$BALENA_APP_NAME\/$BALENA_DEVICE_NAME_AT_INIT/g" /home/chromium/loading.html
