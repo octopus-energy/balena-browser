@@ -103,6 +103,9 @@ case $ROTATE_DISPLAY in
     inverted)
         ROTATE_DISPLAY="180";;
 esac
+# set the device tag directly in the loading html in case the extension
+# doesn't load
+sed -i "s/unconfigured/$BALENA_APP_NAME\/$BALENA_DEVICE_NAME_AT_INIT/g" /home/chromium/loading.html
 
 VIDEO_EXTENSIONS=".webm|.mkv|.flv|.flv|.vob|.ogv|.ogg|.drc|.gif|.gifv|.mng|.avi|.MTS|.M2TS|.TS|.mov|.qt|.wmv|.yuv|.rm|.rmvb|.viv|.asf|.amv|.mp4|.m4p|.m4v|.mpg|.mp2|.mpeg|.mpe|.mpv|.mpg|.mpeg|.m2v|.m4v|.svi|.3gp|.3g2|.mxf|.roq|.nsv|.fl|.f4|.f4|.f4|.f4b"
 YOUTUBE_DOMAINS="youtu.be|youtube.com"
