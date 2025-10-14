@@ -12,7 +12,7 @@ const LAUNCH_URLS = (
 const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
 const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
-const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 1;
+const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 0;
 const RELOAD_ON_ERROR_TIMER = (process.env.RELOAD_ON_ERROR_TIMER || 5) * 1000;
 const PERSISTENT_DATA = process.env.PERSISTENT || "0";
 const REMOTE_DEBUG_PORT = process.env.REMOTE_DEBUG_PORT || 35173;
@@ -128,7 +128,7 @@ let launchChromium = async function () {
             port: REMOTE_DEBUG_PORT,
         });
         console.log(`Connected to Chrome via CDP!`);
-        if (RELOAD_ON_ERROR !== 0) {
+        if (RELOAD_ON_ERROR != 0) {
             const { Network } = client;
 
             try {
