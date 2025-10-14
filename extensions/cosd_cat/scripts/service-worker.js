@@ -1,11 +1,18 @@
 const tabErrors = {};
-let config;
 
-fetch(chrome.runtime.getURL("config.json")).then((resp) => {
-    resp.json().then((jsonConfig) => {
-        config = jsonConfig;
+const configPromise = fetch(chrome.runtime.getURL("config.json"))
+    .then((response) => {
+        if (!response.ok) {
+            throw new Error(
+                `Failed to fetch config.json: ${response.statusText}`
+            );
+        }
+        return response.json();
+    })
+    .catch((error) => {
+        console.error("Failed to fetch config.json:", error);
+        return null;
     });
-}).catch((e) => {console.log(e)});
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.type == "errorDetails") {
@@ -19,19 +26,21 @@ chrome.webRequest.onErrorOccurred.addListener(onErrorOccurred, {
     urls: ["<all_urls>"],
 });
 
-chrome.webRequest.onResponseStarted.addListener(onResponseStarted, {
+chrome.webRequest.onHeadersReceived.addListener(onHeadersReceived, {
     urls: ["<all_urls>"],
+    types: ["main_frame"],
 });
 
-async function onResponseStarted(details) {
+async function onHeadersReceived(details) {
+    const config = await configPromise;
     if (
         details.statusCode > 399 &&
-        details.type == "main_frame" &&
         details.url.toLowerCase().includes(config.upstreamUrl)
-
     ) {
         tabErrors[details.tabId] = details;
-        await chrome.tabs.update(details.tabId, { url: "pages/error/index.html" });
+        await chrome.tabs.update(details.tabId, {
+            url: "pages/error/index.html",
+        });
     }
 }
 
@@ -43,6 +52,8 @@ async function onErrorOccurred(details) {
         details.error != "net::ERR_ABORTED"
     ) {
         tabErrors[details.tabId] = details;
-        await chrome.tabs.update(details.tabId, { url: "pages/error/index.html" });
+        await chrome.tabs.update(details.tabId, {
+            url: "pages/error/index.html",
+        });
     }
 }
