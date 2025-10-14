@@ -9,7 +9,7 @@ export VERSION=`chromium --version`
 echo "Installed browser version: $VERSION"
 
 # get the names of connected screens and store them in an array
-IFS='\n'
+IFS=$'\n'
 SCREENS=$(wlr-randr --json | jq -r '.[].name')
 unset IFS
 
