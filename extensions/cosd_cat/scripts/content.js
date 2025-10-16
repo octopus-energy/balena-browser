@@ -78,7 +78,7 @@ fetch(chrome.runtime.getURL("config.json"))
         resp.json().then((config) => {
             if (startPage) {
                 console.log(`Redirecting to ${config.startingUrl}`);
-                updateLocation(config.startingUrl);
+                setTimeout(() => {updateLocation(config.startingUrl)}, 1000) 
             } else {
                 setOSD(config);
             }
