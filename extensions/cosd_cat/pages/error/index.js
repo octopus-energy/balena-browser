@@ -32,7 +32,7 @@ function countdownReload(seconds) {
         document.getElementById("countdown").innerText = `Retrying...`;
         if (videoError) {
             // if this is a video error, we want to close the last tab in chrome (this tab)
-            // and return back to the parent script (startcage.sh) to let mpv try and play
+            // and return back to the parent script (startweston.sh) to let mpv try and play
             // the video again
             setTimeout(self.close, 1000);
         } else {

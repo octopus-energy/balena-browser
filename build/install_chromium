@@ -35,11 +35,9 @@ apt-get update && apt-get install -y  --no-install-recommends \
     grim \
     fonts-noto \
     fonts-noto-color-emoji \
-    cage \
+    weston \
     mpv \
     seatd \
     udev \
-    initscripts \
-    jq \
-    wlr-randr && \
+    initscripts && \
     rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*

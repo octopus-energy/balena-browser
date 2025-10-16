@@ -71,7 +71,35 @@ function start_mpv() {
 }
 
 function start_chromium() {
-    cage -- /usr/src/app/startcage.sh
+    mkdir -p $HOME/.config
+    rm $HOME/.config/weston.ini 
+
+    cat <<EOT >> $HOME/.config/weston.ini
+[core]
+shell=kiosk
+EOT
+
+    # get the names of connected screens and store them in an array
+    readarray -t SCREENS < <(for p in /sys/class/drm/*/status; do con=${p%/status}; echo "${con#*/card?-}"; done)
+
+    # set the screen rotation to normal if ROTATE_DISPLAY is unset
+    if [ -z "${ROTATE_DISPLAY}" ]; then 
+        ROTATE_DISPLAY="normal"; 
+    else
+        ROTATE_DISPLAY="rotate-${ROTATE_DISPLAY}"
+    fi
+
+    # set the correct scale & transformation for each display
+    for SCREEN in "${SCREENS[@]}"; do
+        cat <<EOT >> $HOME/.config/weston.ini
+[output]
+name=${SCREEN}
+scale=${DISPLAY_SCALE}
+transform=${ROTATE_DISPLAY}
+EOT
+    done
+
+    weston -- /usr/src/app/startweston.sh
 }
 
 # translate old style transform values into degree rotations
