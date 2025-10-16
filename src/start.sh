@@ -62,6 +62,7 @@ fi
 # https://forums.balena.io/t/plymouthd-does-not-quit-and-prevents-gui-apps-from-rendering/372310
 dbus-send \
 --system \
+--print-reply \
 --dest=org.freedesktop.systemd1 \
 --type=method_call \
 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager.StartUnit \
