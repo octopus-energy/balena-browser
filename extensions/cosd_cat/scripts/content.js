@@ -43,6 +43,9 @@ async function setOSD(config) {
         if (document.body == null) {
             document.body = document.createElement("body");
         }
+        if (config.showCursor == "0") {
+            hideCursor();
+        }
 
         document.body.append(cat);
 
@@ -58,6 +61,16 @@ function updateLocation(location) {
         type: "updateLocation",
         url: location,
     });
+}
+
+function hideCursor() {
+    var css = "* { cursor: none; }",
+        head = document.head || document.getElementsByTagName("head")[0],
+        style = document.createElement("style");
+
+    head.appendChild(style);
+
+    style.appendChild(document.createTextNode(css));
 }
 
 fetch(chrome.runtime.getURL("config.json"))
