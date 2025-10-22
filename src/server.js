@@ -24,6 +24,7 @@ const SHOW_DEVICE_TAG = process.env.SHOW_DEVICE_TAG || "1";
 const OSD_CSS = parseJson(process.env.OSD_CSS);
 const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
 const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
+const SHOW_CURSOR = process.env.SHOW_CURSOR || "0";
 
 // Environment variables which can be overriden from the API
 let kioskMode = process.env.KIOSK || "0";
@@ -191,7 +192,8 @@ async function setExtensionStorage(startingUrl) {
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
         upstreamUrl: UPSTREAM_URL,
-        startingUrl: startingUrl
+        startingUrl: startingUrl,
+        showCursor: SHOW_CURSOR
     };
     const jsonData = JSON.stringify(extensionConfig);
 
