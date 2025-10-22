@@ -35,7 +35,8 @@ async function onHeadersReceived(details) {
     const config = await configPromise;
     if (
         details.statusCode > 399 &&
-        details.url.toLowerCase().includes(config.upstreamUrl)
+        (details.url.toLowerCase().includes(config.upstreamUrl) ||
+            details.url.toLowerCase().includes("proxy:8080"))
     ) {
         tabErrors[details.tabId] = details;
         await chrome.tabs.update(details.tabId, {
