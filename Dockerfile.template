@@ -15,6 +15,7 @@ RUN JOBS=MAX npm install --unsafe-perm --production && npm cache clean --force
 
 COPY ./src /usr/src/app/
 COPY ./extensions /usr/share/chromium/extensions/
+COPY ./udev /etc/udev/rules.d/
 
 RUN chmod +x ./*.sh
 
