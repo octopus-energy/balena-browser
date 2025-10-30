@@ -41,5 +41,5 @@ apt-get update && apt-get install -y  --no-install-recommends \
     udev \
     initscripts \
     jq \
-    wlr-randr && \
+    kanshi && \
     rm -rf /var/cache/apt/archives/* /var/lib/apt/lists/*
