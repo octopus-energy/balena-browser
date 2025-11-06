@@ -72,6 +72,7 @@ let launchChromium = async function () {
             "--ozone-platform=wayland",
             "--autoplay-policy=no-user-gesture-required",
             "--noerrdialogs",
+            "--hide-scrollbars",
             "--disable-session-crashed-bubble",
             "--check-for-update-interval=31536000",
         ];
