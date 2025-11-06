@@ -40,12 +40,11 @@ async function setOSD(config) {
             }
         }
 
-        if (document.body == null) {
-            document.body = document.createElement("body");
-        }
         if (config.showCursor == "0") {
             hideCursor();
         }
+
+        await waitForBody();
 
         document.body.append(cat);
 
@@ -54,6 +53,26 @@ async function setOSD(config) {
                 config.balenaId;
         }
     }
+}
+
+function waitForBody() {
+    return new Promise(resolve => {
+        if (document.body) {
+            return resolve(document.body);
+        }
+
+        const observer = new MutationObserver(() => {
+            if (document.body) {
+                observer.disconnect();
+                resolve(document.body);
+            }
+        });
+
+        observer.observe(document, {
+            childList: true,
+            subtree: true
+        });
+    });
 }
 
 function updateLocation(location) {
