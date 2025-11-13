@@ -76,9 +76,9 @@ function start_chromium() {
 
 # translate old style transform values into degree rotations
 case $ROTATE_DISPLAY in
-    left)
-        ROTATE_DISPLAY="270";;
     right)
+        ROTATE_DISPLAY="270";;
+    left)
         ROTATE_DISPLAY="90";;
     inverted)
         ROTATE_DISPLAY="180";;
