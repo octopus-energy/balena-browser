@@ -1,5 +1,7 @@
 #!/bin/bash
 
+touch /var/lock/chromium-starting.lock
+
 # these two lines remove the "restore pages" popup on chromium. 
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' /data/chromium/'Local State' > /dev/null 2>&1 || true 
 sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]\+"/"exit_type":"Normal"/' /data/chromium/Default/Preferences > /dev/null 2>&1 || true 
@@ -8,6 +10,8 @@ sed -i 's/"exited_cleanly":false/"exited_cleanly":true/; s/"exit_type":"[^"]\+"/
 export VERSION=`chromium --version`
 echo "Installed browser version: $VERSION"
 
-/usr/src/app/setupkanshi.sh &
+/usr/src/app/setupkanshi.sh
 
 node /usr/src/app/server.js
+
+pkill kanshi
