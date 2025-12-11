@@ -21,7 +21,7 @@ font-size: calc(var(--font-size) / var(--balena-display-scale));`;
 
 async function setOSD(config) {
     // get the entire extension storage object
-    if (config.balenaId != undefined) {
+    if (config.balenaId != undefined && config.showDeviceTag != "0") {
         // set the device slug
         cat.innerHTML = config.balenaId;
 
