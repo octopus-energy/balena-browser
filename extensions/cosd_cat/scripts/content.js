@@ -1,4 +1,5 @@
 const cat = document.createElement("div");
+
 const fillTagElement =
     window.location.href.includes(chrome.runtime.id + "/pages/error") ||
     window.location.href.includes(chrome.runtime.id + "/pages/unconfigured");
@@ -76,9 +77,32 @@ function waitForBody() {
 }
 
 function updateLocation(location) {
+    // ask the service worker to update the URL in the browser
     chrome.runtime.sendMessage(chrome.runtime.id, {
         type: "updateLocation",
         url: location,
+    });
+}
+
+async function setupInteractionTimeout(config) {
+    console.log(config);
+    if (
+        isNaN(config.interactionTimeout) ||
+        config.interactionTimeout == 0 ||
+        config.interactionTimeout < 0
+    ) { return }
+    const interactionEvents = ['touchend', 'mouseup', 'keyup', 'wheel'];
+    let timeout = config.interactionTimeout * 1000 < 5000 ? 5000 : config.interactionTimeout * 1000; // don't let the refresh be less than 5 seconds
+
+    interactionEvents.forEach(eventType => {
+        // Use passive: true for better scroll/touch performance
+        document.addEventListener(eventType, () => {
+            chrome.runtime.sendMessage(chrome.runtime.id, {
+                type: "interactionTimeout",
+                url: config.startingUrl,
+                timeout: timeout
+            })
+        }, { passive: true });
     });
 }
 
@@ -97,9 +121,10 @@ fetch(chrome.runtime.getURL("config.json"))
         resp.json().then((config) => {
             if (startPage) {
                 console.log(`Redirecting to ${config.startingUrl}`);
-                setTimeout(() => {updateLocation(config.startingUrl)}, 1000);
+                setTimeout(updateLocation, 1000, config.startingUrl);
             } else {
                 setOSD(config);
+                setupInteractionTimeout(config);
             }
         });
     })
