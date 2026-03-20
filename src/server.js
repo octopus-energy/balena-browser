@@ -11,6 +11,7 @@ const LAUNCH_URLS = (
 ).split(",");
 const UPSTREAM_URL = process.env.UPSTREAM_URL;
 const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
+const INTERACTION_TIMEOUT = process.env.INTERACTION_TIMEOUT || 0;
 const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 0;
 const RELOAD_ON_ERROR_TIMER = (process.env.RELOAD_ON_ERROR_TIMER || 5) * 1000;
@@ -194,7 +195,8 @@ async function setExtensionStorage(startingUrl) {
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
         upstreamUrl: UPSTREAM_URL,
         startingUrl: startingUrl,
-        showCursor: SHOW_CURSOR
+        showCursor: SHOW_CURSOR,
+        interactionTimeout: INTERACTION_TIMEOUT
     };
     const jsonData = JSON.stringify(extensionConfig);
 

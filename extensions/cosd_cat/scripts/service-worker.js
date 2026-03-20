@@ -1,4 +1,5 @@
 const tabErrors = {};
+const userInteractionTimers = {}
 
 const configPromise = fetch(chrome.runtime.getURL("config.json"))
     .then((response) => {
@@ -19,6 +20,16 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         sendResponse(tabErrors[sender.tab.id]);
     } else if (request.type == "updateLocation") {
         chrome.tabs.update(sender.tab.id, { url: request.url });
+    } else if (request.type == "interactionTimeout") {
+        if (userInteractionTimers[sender.tab.id] != null) {
+            clearTimeout(userInteractionTimers[sender.tab.id]);
+        }
+        userInteractionTimers[sender.tab.id] = setTimeout(
+            chrome.tabs.update,
+            request.timeout,
+            sender.tab.id,
+            { url: request.url }
+        );
     }
 });
 
