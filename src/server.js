@@ -2,6 +2,11 @@
 
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
+const express = require("express");
+const path = require('path');
+const { spawn } = require('child_process');
+const { readFile, unlink } = require('fs').promises;
+const os = require('os');
 const schedule = require("node-schedule");
 const fs = require("fs");
 
@@ -266,4 +271,39 @@ process.on("SIGINT", async () => {
     // Stop all scheduled jobs
     await schedule.gracefulShutdown();
     process.exit();
+});
+
+const app = express();
+
+app.get('/screenshot', (req, res) => {
+    res.set('Content-Type', 'image/webp');
+
+    const grim = spawn('grim', ['-l', '0', '-']);
+
+    const cwebp = spawn('cwebp', ['-quiet', '-resize', '1280', '0', '-o', '-', '--', '-']);
+
+    grim.stdout.pipe(cwebp.stdin);
+    cwebp.stdout.pipe(res);
+
+    grim.on('error', (err) => {
+        console.error('Grim failed to start:', err);
+        if (!res.headersSent) res.status(500).send('Screenshot generation failed.');
+    });
+
+    cwebp.on('error', (err) => {
+        console.error('cwebp failed to start:', err);
+        if (!res.headersSent) res.status(500).send('WebP conversion failed.');
+    });
+
+    grim.on('close', (code) => {
+        if (code !== 0) console.error(`Grim crashed with exit code ${code}`);
+    });
+
+    cwebp.on('close', (code) => {
+        if (code !== 0) console.error(`cwebp crashed with exit code ${code}`);
+    });
+});
+
+app.listen(8080, () => {
+    console.log('Browser API running on port: ' + 8080);
 });
