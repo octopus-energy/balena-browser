@@ -2,16 +2,11 @@
 
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
-const schedule = require("node-schedule");
 const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
-const LAUNCH_URLS = (
-    process.env.LAUNCH_URL ||
-    "chrome-extension://ljnalmhbggcggncjbchegchjcdockndi/pages/unconfigured/index.html"
-).split(",");
-const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
-const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
+const CONTENT = parseJson(process.env.CONFIG_DISPLAY);
+const SHARED_CREDENTIALS = parseJson(process.env.SHARED_CREDENTIALS);
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 0;
 const RELOAD_ON_ERROR_TIMER = (process.env.RELOAD_ON_ERROR_TIMER || 5) * 1000;
 const PERSISTENT_DATA = process.env.PERSISTENT || "0";
@@ -22,10 +17,6 @@ const FLEET_NAME = process.env.BALENA_APP_NAME || "unknown-fleet";
 const DEVICE_NAME = process.env.BALENA_DEVICE_NAME_AT_INIT || "unknown-device";
 const SHOW_DEVICE_TAG = process.env.SHOW_DEVICE_TAG || "1";
 const OSD_CSS = parseJson(process.env.OSD_CSS);
-const ADD_HEADERS = validateHeaders(parseJson(process.env.ADD_HEADERS));
-const UPSTREAM_URL = process.env.UPSTREAM_URL;
-const AUTH_HEADER_KEY = process.env.AUTH_HEADER_KEY;
-const AUTH_HEADER_VALUE = process.env.AUTH_HEADER_VALUE;
 const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
 const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
 const SHOW_CURSOR = process.env.SHOW_CURSOR || "0";
@@ -35,7 +26,6 @@ let kioskMode = process.env.KIOSK || "0";
 let enableGpu = process.env.ENABLE_GPU || "0";
 
 let DEFAULT_FLAGS = [];
-let nextUrlIndex = 0;
 let flags = [];
 
 function parseJson(string) {
@@ -44,41 +34,6 @@ function parseJson(string) {
     } catch (e) {
         return undefined;
     }
-}
-
-// checks if we have the headers needed to proxy requests in Chrome
-function validateHeaders(addHeaders) {
-    const wantedKeys = ["upstreamUrl", "authHeaderKey", "authHeaderValue"];
-
-    try {
-        return addHeaders.filter((addHeader) => {
-            return wantedKeys.every((wantedKey) => {
-                if (Object.keys(addHeader).includes(wantedKey)) {
-                    return true;
-                } else {
-                    console.log(`${wantedKey} not in addHeader object, ignoring entry`);
-                    return false;
-                }
-            });
-        });
-    } catch (e) {
-        console.log(`Error parsing ADD_HEADERS: ${e}`)
-        return [];
-    }
-}
-
-// Returns the URL to display, adhering to the hieracrchy:
-// 1) the configured LAUNCH_URL
-// 2) the default static HTML
-function getUrlToDisplay() {
-    nextUrl = LAUNCH_URLS[nextUrlIndex++];
-    if (nextUrlIndex >= LAUNCH_URLS.length) {
-        nextUrlIndex = 0;
-    }
-
-    console.log(`Next URL: ${nextUrl}`);
-
-    return nextUrl;
 }
 
 // Launch the browser with the URL specified
@@ -100,6 +55,7 @@ let launchChromium = async function () {
             "--hide-scrollbars",
             "--disable-session-crashed-bubble",
             "--check-for-update-interval=31536000",
+            "--disk-cache-size=2147483647",
         ];
 
         // Merge the chromium default and balena default flags
@@ -187,19 +143,7 @@ let launchChromium = async function () {
     currentUrl = url;
     return client;
 };
-async function goToUrl(cdpClient, url) {
-    console.log(`Navigating to URL: ${url}`);
-    try {
-        await cdpClient.Page.navigate({ url: url });
-    } catch (err) {
-        console.error(`Could not navigate to URL via CDP. Error: ${err}`);
-    }
-}
 
-async function reloadPage(cdpClient) {
-    console.log("Refreshing page.");
-    await goToUrl(cdpClient, LAUNCH_URLS[nextUrlIndex]);
-}
 
 // Get's the chrome-launcher default flags, minus the extensions and audio muting flags.
 async function SetDefaultFlags() {
@@ -208,19 +152,7 @@ async function SetDefaultFlags() {
     );
 }
 
-// if any additional headers are set, we should add them to the array
-function addArbitraryHeaders() {
-    if (UPSTREAM_URL && AUTH_HEADER_KEY && AUTH_HEADER_VALUE) {
-        ADD_HEADERS.push({
-            upstreamUrl: UPSTREAM_URL,
-            authHeaderKey: AUTH_HEADER_KEY,
-            authHeaderValue: AUTH_HEADER_VALUE
-        })
-    }
-}
-
-async function setExtensionStorage(startingUrl) {
-    addArbitraryHeaders();
+async function setExtensionStorage() {
     const extensionConfig = {
         balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
         displayScale: DISPLAY_SCALE,
@@ -229,9 +161,9 @@ async function setExtensionStorage(startingUrl) {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
-        startingUrl: startingUrl,
         showCursor: SHOW_CURSOR,
-        addHeaders: ADD_HEADERS,
+        content: CONTENT || [],
+        sharedCredentials: SHARED_CREDENTIALS || [],
     };
     const jsonData = JSON.stringify(extensionConfig);
 
@@ -250,30 +182,9 @@ async function setExtensionStorage(startingUrl) {
 }
 
 async function main() {
-    let url = getUrlToDisplay();
     await SetDefaultFlags();
-    await setExtensionStorage(url);
+    await setExtensionStorage();
     const cdpClient = await launchChromium();
-
-    if (cdpClient != null) {
-        if (LAUNCH_URLS.length > 1 && ROTATE_SCHEDULE !== 0) {
-            schedule.scheduleJob(ROTATE_SCHEDULE, async () => {
-                let url = await getUrlToDisplay();
-                await goToUrl(cdpClient, url);
-            });
-        }
-
-        if (REFRESH_SCHEDULE !== 0) {
-            schedule.scheduleJob(
-                REFRESH_SCHEDULE,
-                async () => await reloadPage(cdpClient)
-            );
-        }
-    } else {
-        console.log(
-            "WARNING - CDP client is null and so refresh and rotate schedules are not available."
-        );
-    }
 }
 
 main().catch((err) => {
@@ -282,7 +193,5 @@ main().catch((err) => {
 });
 
 process.on("SIGINT", async () => {
-    // Stop all scheduled jobs
-    await schedule.gracefulShutdown();
     process.exit();
 });
