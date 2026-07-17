@@ -7,7 +7,7 @@ async function setupOSD() {
         
         if (config.balenaId) {
             const osd = document.createElement("div");
-            osd.innerHTML = config.balenaId;
+            osd.textContent = config.balenaId;
             
             const displayScale = config.displayScale || 1;
             const fontSize = config.fontSize || "18px";

@@ -159,6 +159,20 @@ async function SetDefaultFlags() {
 }
 
 async function setExtensionStorage() {
+    let sharedCredentials = {};
+
+    if (
+        SHARED_CREDENTIALS &&
+        typeof SHARED_CREDENTIALS === "object" &&
+        !Array.isArray(SHARED_CREDENTIALS)
+    ) {
+        sharedCredentials = SHARED_CREDENTIALS;
+    } else if (SHARED_CREDENTIALS !== undefined) {
+        console.warn(
+            "SHARED_CREDENTIALS must be a JSON object keyed by domain; ignoring invalid value"
+        );
+    }
+
     const extensionConfig = {
         balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
         displayScale: DISPLAY_SCALE,
@@ -169,22 +183,21 @@ async function setExtensionStorage() {
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
         showCursor: SHOW_CURSOR,
         content: CONTENT || [],
-        sharedCredentials: SHARED_CREDENTIALS || [],
+        sharedCredentials,
     };
     const jsonData = JSON.stringify(extensionConfig);
 
-    fs.writeFile(
-        "/usr/share/chromium/extensions/cosd_cat/config.json",
-        jsonData,
-        "utf8",
-        (err) => {
-            if (err) {
-                console.error("Error writing config to file", err);
-            } else {
-                console.log("Config written to file");
-            }
-        }
-    );
+    try {
+        await fs.promises.writeFile(
+            "/usr/share/chromium/extensions/cosd_cat/config.json",
+            jsonData,
+            "utf8"
+        );
+        console.log("Config written to file");
+    } catch (err) {
+        console.error("Error writing config to file", err);
+        throw err;
+    }
 }
 
 async function main() {

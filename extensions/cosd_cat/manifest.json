@@ -20,7 +20,7 @@
     },
     "web_accessible_resources": [
         {
-            "resources": ["config.json", "pages/video/index.html", "pages/video/constantine-swim.webp", "pages/error/index.html", "pages/unconfigured/index.html", "scripts/logger.js", "scripts/video-player.js"],
+            "resources": ["config.json", "pages/video/index.html", "pages/video/constantine-swim.webp", "pages/error/index.html", "pages/unconfigured/index.html", "scripts/logger.js", "scripts/credential-utils.js", "scripts/video-player.js"],
             "matches": ["<all_urls>"]
         }
     ]

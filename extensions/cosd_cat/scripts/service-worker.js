@@ -1,4 +1,4 @@
-importScripts("logger.js");
+importScripts("logger.js", "credential-utils.js");
 
 const tabErrors = {};
 
@@ -29,23 +29,22 @@ function convertS3Url(url) {
 /**
  * Resolve credentials for a given URL
  * 1. If content has a credential, use that
- * 2. Otherwise, filter sharedCredentials by domain match
+ * 2. Otherwise, look up sharedCredentials by exact hostname
  */
 function resolveCredentials(url, contentCredential, sharedCredentials) {
-    if (contentCredential) {
-        return [contentCredential];
-    }
-
     try {
-        const urlObj = new URL(url);
-        const domain = urlObj.hostname;
-        if (!sharedCredentials) return [];
+        const { credentials, warning } =
+            CredentialUtils.resolveCredentialsForUrl(
+                url,
+                contentCredential,
+                sharedCredentials
+            );
 
-        return sharedCredentials.filter((cred) => {
-            if (cred.type !== "http_header") return false;
-            if (!cred.domain) return false;
-            return domain.endsWith(cred.domain);
-        });
+        if (warning) {
+            log("WARN", warning);
+        }
+
+        return credentials;
     } catch (e) {
         log("ERROR", "Error parsing URL for credential resolution:", e);
         return [];
@@ -65,47 +64,62 @@ async function updateDeclarativeNetRequestRules(credentials) {
 
     // Create a rule for each credential
     credentials.forEach((cred, index) => {
-        if (cred.type === "http_header") {
-            headerRules.push({
-                id: index + 1,
-                priority: 1,
-                action: {
-                    type: "modifyHeaders",
-                    requestHeaders: [
-                        {
-                            header: cred.key,
-                            operation: "set",
-                            value: cred.value,
-                        },
-                    ],
-                },
-                condition: {
-                    // Match all requests to the domain
-                    urlFilter: `||${cred.domain}`,
-                    resourceTypes: [
-                        "main_frame",
-                        "sub_frame",
-                        "stylesheet",
-                        "script",
-                        "image",
-                        "font",
-                        "object",
-                        "xmlhttprequest",
-                        "ping",
-                        "csp_report",
-                        "media",
-                        "websocket",
-                        "webtransport",
-                        "webbundle",
-                        "other",
-                    ],
-                },
-            });
+        const validationError = CredentialUtils.getCredentialValidationError(
+            cred
+        );
+        if (validationError === "unsupported_type") {
+            return;
         }
+
+        if (validationError === "missing_domain") {
+            log("WARN", "Skipping credential with missing domain");
+            return;
+        }
+
+        if (validationError === "invalid_key_value") {
+            log("WARN", "Skipping credential with invalid key/value", cred);
+            return;
+        }
+
+        headerRules.push({
+            id: index + 1,
+            priority: 1,
+            action: {
+                type: "modifyHeaders",
+                requestHeaders: [
+                    {
+                        header: cred.key,
+                        operation: "set",
+                        value: cred.value,
+                    },
+                ],
+            },
+            condition: {
+                // Use regexFilter so credentials only apply to exact hostname.
+                regexFilter: CredentialUtils.buildExactHostRegex(cred.domain),
+                resourceTypes: [
+                    "main_frame",
+                    "sub_frame",
+                    "stylesheet",
+                    "script",
+                    "image",
+                    "font",
+                    "object",
+                    "xmlhttprequest",
+                    "ping",
+                    "csp_report",
+                    "media",
+                    "websocket",
+                    "webtransport",
+                    "webbundle",
+                    "other",
+                ],
+            },
+        });
     });
 
     // Update rules
-    chrome.declarativeNetRequest.updateSessionRules({
+    await chrome.declarativeNetRequest.updateSessionRules({
         removeRuleIds,
         addRules: headerRules,
     });
@@ -133,9 +147,12 @@ async function activateItem(index) {
     const item = content[index];
     log("INFO", `Activating content item ${index}:`, item);
 
+    // Convert S3 URLs and build target URL
+    let targetUrl = convertS3Url(item.url);
+
     // Resolve credentials
     const credentials = resolveCredentials(
-        item.url,
+        targetUrl,
         item.credential,
         config.sharedCredentials
     );
@@ -143,8 +160,7 @@ async function activateItem(index) {
     // Update header rules
     await updateDeclarativeNetRequestRules(credentials);
 
-    // Convert S3 URLs and build target URL
-    let targetUrl = convertS3Url(item.url);
+
 
     if (item.type === "video") {
         // Video items navigate to a special player page
@@ -155,7 +171,9 @@ async function activateItem(index) {
         log("INFO", `Video player URL: ${targetUrl}`);
     } else if (item.scale) {
         // Store scale in session storage for the extension to apply
-        chrome.storage.local.set({ currentScale: item.scale });
+        await chrome.storage.local.set({ currentScale: item.scale });
+    } else {
+        await chrome.storage.local.remove("currentScale");
     }
 
     // Get the active tab and navigate
@@ -187,7 +205,9 @@ async function activateItem(index) {
 async function initializeCycling() {
     const config = await configPromise;
     if (config && config.content && config.content.length > 0) {
-        await activateItem(0);
+        const data = await chrome.storage.local.get(["currentIndex"]);
+         const startIndex = data.currentIndex ?? 0;
+         await activateItem(startIndex);
     } else {
         // No content configured, show unconfigured page
         log("WARN", "No content configured, navigating to unconfigured page");
