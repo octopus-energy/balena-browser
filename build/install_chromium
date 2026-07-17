@@ -36,6 +36,9 @@ apt-get update && apt-get install -y  --no-install-recommends \
     fonts-noto \
     fonts-noto-color-emoji \
     cage \
+    mpv \
+    grim \
+    webp \
     seatd \
     udev \
     initscripts \

@@ -2,6 +2,12 @@
 
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
+const express = require("express");
+const path = require('path');
+const { spawn } = require('child_process');
+const { readFile, unlink } = require('fs').promises;
+const os = require('os');
+const schedule = require("node-schedule");
 const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
@@ -141,7 +147,7 @@ let launchChromium = async function () {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }
     currentUrl = url;
-    return client;
+    return { cdpClient: client, chrome: chrome };
 };
 
 
@@ -190,8 +196,54 @@ async function main() {
 main().catch((err) => {
     console.log("Main error: ", err);
     process.exit(1);
+}).then(() => {
+    fs.stat('/var/lock/chromium-starting.lock', function (err) {
+        if (err) {
+            return console.error(err);
+        }
+
+        fs.unlink('/var/lock/chromium-starting.lock', function (err) {
+            if (err) return console.log(err);
+            console.log('Deleted /var/lock/chromium-starting.lock');
+        });
+    });
 });
 
 process.on("SIGINT", async () => {
     process.exit();
+});
+
+const app = express();
+
+app.get('/screenshot', (req, res) => {
+    res.set('Content-Type', 'image/webp');
+
+    const grim = spawn('grim', ['-l', '0', '-']);
+
+    const cwebp = spawn('cwebp', ['-quiet', '-resize', '1280', '0', '-o', '-', '--', '-']);
+
+    grim.stdout.pipe(cwebp.stdin);
+    cwebp.stdout.pipe(res);
+
+    grim.on('error', (err) => {
+        console.error('Grim failed to start:', err);
+        if (!res.headersSent) res.status(500).send('Screenshot generation failed.');
+    });
+
+    cwebp.on('error', (err) => {
+        console.error('cwebp failed to start:', err);
+        if (!res.headersSent) res.status(500).send('WebP conversion failed.');
+    });
+
+    grim.on('close', (code) => {
+        if (code !== 0) console.error(`Grim crashed with exit code ${code}`);
+    });
+
+    cwebp.on('close', (code) => {
+        if (code !== 0) console.error(`cwebp crashed with exit code ${code}`);
+    });
+});
+
+app.listen(8080, () => {
+    console.log('Browser API running on port: ' + 8080);
 });
