@@ -141,7 +141,7 @@ let launchChromium = async function () {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }
     currentUrl = url;
-    return client;
+    return { cdpClient: client, chrome: chrome };
 };
 
 
@@ -190,6 +190,17 @@ async function main() {
 main().catch((err) => {
     console.log("Main error: ", err);
     process.exit(1);
+}).then(() => {
+    fs.stat('/var/lock/chromium-starting.lock', function (err) {
+        if (err) {
+            return console.error(err);
+        }
+
+        fs.unlink('/var/lock/chromium-starting.lock', function (err) {
+            if (err) return console.log(err);
+            console.log('Deleted /var/lock/chromium-starting.lock');
+        });
+    });
 });
 
 process.on("SIGINT", async () => {
