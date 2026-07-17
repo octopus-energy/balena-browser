@@ -40,6 +40,11 @@ function setupPlayer() {
     let videoUrl = params.get('url');
     const scale = params.get('scale') || '1';
 
+    if (!videoUrl) {
+        log('ERROR', 'No video URL provided');
+        return;
+    }
+
     try {
         videoUrl = decodeURIComponent(videoUrl);
     } catch (e) {
@@ -51,11 +56,6 @@ function setupPlayer() {
 
     const video = document.getElementById('video');
     const loadingOverlay = document.getElementById('loading-overlay');
-
-    if (!videoUrl) {
-        log('ERROR', 'No video URL provided');
-        return;
-    }
 
     video.src = videoUrl;
 
