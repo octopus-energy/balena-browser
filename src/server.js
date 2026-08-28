@@ -26,6 +26,8 @@ const OSD_CSS = parseJson(process.env.OSD_CSS);
 const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
 const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
 const SHOW_CURSOR = process.env.SHOW_CURSOR || "0";
+const BROWSER_LOG_PATH = process.env.BROWSER_LOG_PATH || "/data/chrome.log";
+const BROWSER_LOG_MAX_BYTES = parseInt(process.env.BROWSER_LOG_MAX_BYTES || "5242880", 10);
 
 // Environment variables which can be overriden from the API
 let kioskMode = process.env.KIOSK || "0";
@@ -39,6 +41,46 @@ function parseJson(string) {
         return JSON.parse(string);
     } catch (e) {
         return undefined;
+    }
+}
+
+function rotateLogs(logPath) {
+    try {
+        if (fs.statSync(logPath).size >= BROWSER_LOG_MAX_BYTES) {
+            fs.renameSync(logPath, `${logPath}.1`);
+        }
+    } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`Log rotation failed: ${err.message}`);
+    }
+}
+
+async function setupBrowserLogging(client, logPath) {
+    const { Log, Runtime } = client;
+    rotateLogs(logPath);
+    setInterval(() => rotateLogs(logPath), 60 * 1000);
+    try {
+        Log.entryAdded(({ entry }) => {
+            const line = `[${new Date().toISOString()}] [${entry.level}] [${entry.source}] ${entry.text}\n`;
+            fs.appendFile(logPath, line, (err) => {
+                if (err) console.warn(`Browser log write failed: ${err.message}`);
+            });
+        });
+        await Log.enable();
+
+        Runtime.exceptionThrown(({ exceptionDetails }) => {
+            const desc = exceptionDetails.exception
+                ? exceptionDetails.exception.description || exceptionDetails.exception.value
+                : exceptionDetails.text;
+            const line = `[${new Date().toISOString()}] [error] [js-exception] ${desc}\n`;
+            fs.appendFile(logPath, line, (err) => {
+                if (err) console.warn(`Browser log write failed: ${err.message}`);
+            });
+        });
+        await Runtime.enable();
+
+        console.log(`Browser console logging to: ${logPath}`);
+    } catch (err) {
+        console.warn(`Could not set up browser logging: ${err}`);
     }
 }
 
@@ -143,6 +185,8 @@ let launchChromium = async function () {
                 console.error(`Could not set up Network events. Error: ${err}`);
             }
         }
+
+        await setupBrowserLogging(client, BROWSER_LOG_PATH);
     } catch (err) {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }
