@@ -8,6 +8,12 @@ async function setupOSD() {
         if (config.balenaId) {
             const osd = document.createElement("div");
             osd.textContent = config.balenaId;
+
+            // This is for the error display on the screen
+            const screenIdentifier = document.getElementById("screenIdentifier");
+            if (screenIdentifier) {
+                screenIdentifier.textContent = config.balenaId;
+            }
             
             const displayScale = config.displayScale || 1;
             const fontSize = config.fontSize || "18px";
@@ -56,16 +62,34 @@ function setupPlayer() {
 
     const video = document.getElementById('video');
     const loadingOverlay = document.getElementById('loading-overlay');
-
-    video.src = videoUrl;
+    const errorOverlay = document.getElementById('error-overlay');
+    const errorDetails = document.getElementById('error-details');
+    let reportedError = false;
 
     video.addEventListener('play', () => {
         log('DEBUG', 'Video started');
         if (loadingOverlay) loadingOverlay.classList.add('hidden');
     });
     video.addEventListener('error', () => {
-        log('ERROR', `Video error: ${video.error?.code}: ${video.error?.message}`);
+        const error = `${video.error?.code}: ${video.error?.message}`;
+        log('ERROR', `Video error: ${error}`);
+        if (loadingOverlay) loadingOverlay.classList.add('hidden');
+        if (errorOverlay) errorOverlay.classList.add('visible');
+        if (errorDetails) errorDetails.textContent = `${error} when trying to play ${videoUrl}`;
+
+        if (reportedError) {
+            return;
+        }
+
+        reportedError = true;
+        chrome.runtime.sendMessage(chrome.runtime.id, {
+            type: 'video_error',
+            url: videoUrl,
+            error,
+        });
     });
+
+    video.src = videoUrl;
 }
 
 
