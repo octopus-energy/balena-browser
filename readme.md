@@ -78,6 +78,26 @@ The following environment variables allow configuration of the `browser` block:
 |`OSD_FONT_SIZE`|css size|18px|Specifies the value used in the `font-size` css property for the OSD device name tag|
 |`OSD_CSS`|object|`{}`|Object holding key-value pairs for css property names and values to be applied to the OSD device name tag|
 |`SHOW_DEVICE_TAG`|`0`, `1`|`1`|Used to hide the device tag. Useful for full screen video playback|
+|`SHARED_CREDENTIALS`|JSON object|`{}`|Domain-keyed credentials map used to inject request headers for exact host matches.|
+
+`SHARED_CREDENTIALS` format:
+
+```json
+{
+  "postman-echo.com": {
+    "type": "http_header",
+    "key": "Authorization",
+    "value": "Bearer token123"
+  },
+  "kraken.octopus.energy": {
+    "type": "http_header",
+    "key": "SessionlessAuthorization",
+    "value": "token-value"
+  }
+}
+```
+
+Each key must be an exact hostname. Subdomains are not matched unless they are explicitly added as keys.
 
 ---
 

@@ -7,31 +7,38 @@ const startPage = window.location.href.includes(
     "file:///home/chromium/loading.html"
 );
 
-cat.style.cssText = `
-position: fixed;
-padding: calc(2px / var(--balena-display-scale));
-bottom: 0;
-left: 0;
-background-color: #180048;
-display: block;
-z-index: 2147483647;
-line-height: normal;
-color: #60F0F8;
-font-size: calc(var(--font-size) / var(--balena-display-scale));`;
+function getScaleValue(scale) {
+    const value = parseFloat(scale);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+}
 
 async function setOSD(config) {
-    // get the entire extension storage object
+    const data = await chrome.storage.local.get(["currentScale"]);
+    const contentScale = getScaleValue(data.currentScale || 1);
+    document.documentElement.style.zoom = contentScale;
+
     if (config.balenaId != undefined && config.showDeviceTag != "0") {
         // set the device slug
         cat.innerHTML = config.balenaId;
 
-        // set the known css attributes
-        cat.style.setProperty(
-            "--balena-display-scale",
-            config.displayScale || 1
-        );
-        cat.style.setProperty("--font-size", config.fontSize || "18px");
-        cat.style.setProperty("font-family", config.fontFamily || "sans-serif");
+        // Get the values
+        const displayScale = getScaleValue(config.displayScale || 1);
+        const osdScale = displayScale * contentScale;
+        const fontSize = config.fontSize || "18px";
+        const fontFamily = config.fontFamily || "sans-serif";
+
+        // Use setProperty for all styles - this is more reliable than cssText for custom properties
+        cat.style.setProperty("position", "fixed");
+        cat.style.setProperty("padding", `calc(2px / ${osdScale})`);
+        cat.style.setProperty("bottom", "0");
+        cat.style.setProperty("left", "0");
+        cat.style.setProperty("background-color", "#180048");
+        cat.style.setProperty("display", "block");
+        cat.style.setProperty("z-index", "2147483647");
+        cat.style.setProperty("line-height", "normal");
+        cat.style.setProperty("color", "#60F0F8");
+        cat.style.setProperty("font-size", `calc(${fontSize} / ${osdScale})`);
+        cat.style.setProperty("font-family", fontFamily);
 
         // set arbitrary css attributes
         if (config.css != undefined) {
@@ -95,14 +102,18 @@ function hideCursor() {
 fetch(chrome.runtime.getURL("config.json"))
     .then((resp) => {
         resp.json().then((config) => {
+            log("INFO", "Config loaded:", config);
             if (startPage) {
-                console.log(`Redirecting to ${config.startingUrl}`);
-                setTimeout(() => {updateLocation(config.startingUrl)}, 1000);
+                // On loading page, trigger the service worker to start cycling
+                log("INFO", "Loading page detected - starting content cycling");
+                chrome.runtime.sendMessage(chrome.runtime.id, {
+                    type: "start_cycling",
+                });
             } else {
                 setOSD(config);
             }
         });
     })
     .catch((e) => {
-        console.log(e);
+        log("ERROR", "Failed to load config.json:", e);
     });
