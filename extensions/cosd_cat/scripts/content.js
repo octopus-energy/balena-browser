@@ -7,20 +7,29 @@ const startPage = window.location.href.includes(
     "file:///home/chromium/loading.html"
 );
 
+function getScaleValue(scale) {
+    const value = parseFloat(scale);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 async function setOSD(config) {
-    // get the entire extension storage object
+    const data = await chrome.storage.local.get(["currentScale"]);
+    const contentScale = getScaleValue(data.currentScale || 1);
+    document.documentElement.style.zoom = contentScale;
+
     if (config.balenaId != undefined && config.showDeviceTag != "0") {
         // set the device slug
         cat.innerHTML = config.balenaId;
 
         // Get the values
-        const displayScale = config.displayScale || 1;
+        const displayScale = getScaleValue(config.displayScale || 1);
+        const osdScale = displayScale * contentScale;
         const fontSize = config.fontSize || "18px";
         const fontFamily = config.fontFamily || "sans-serif";
 
         // Use setProperty for all styles - this is more reliable than cssText for custom properties
         cat.style.setProperty("position", "fixed");
-        cat.style.setProperty("padding", `calc(2px / ${displayScale})`);
+        cat.style.setProperty("padding", `calc(2px / ${osdScale})`);
         cat.style.setProperty("bottom", "0");
         cat.style.setProperty("left", "0");
         cat.style.setProperty("background-color", "#180048");
@@ -28,7 +37,7 @@ async function setOSD(config) {
         cat.style.setProperty("z-index", "2147483647");
         cat.style.setProperty("line-height", "normal");
         cat.style.setProperty("color", "#60F0F8");
-        cat.style.setProperty("font-size", `calc(${fontSize} / ${displayScale})`);
+        cat.style.setProperty("font-size", `calc(${fontSize} / ${osdScale})`);
         cat.style.setProperty("font-family", fontFamily);
 
         // set arbitrary css attributes
@@ -36,12 +45,6 @@ async function setOSD(config) {
             for (var attr in config.css) {
                 cat.style[attr] = config.css[attr];
             }
-        }
-
-        // Apply per-content scale via CSS zoom if set in local storage
-        const data = await chrome.storage.local.get(["currentScale"]);
-        if (data.currentScale) {
-            document.documentElement.style.zoom = data.currentScale;
         }
 
         if (config.showCursor == "0") {

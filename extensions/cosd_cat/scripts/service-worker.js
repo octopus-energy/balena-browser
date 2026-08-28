@@ -160,7 +160,7 @@ async function activateItem(index) {
     // Update header rules
     await updateDeclarativeNetRequestRules(credentials);
 
-
+    await chrome.storage.local.remove("currentScale");
 
     if (item.type === "video") {
         // Video items navigate to a special player page
@@ -170,10 +170,8 @@ async function activateItem(index) {
         targetUrl = `${videoPlayerUrl}?url=${encodedUrl}&scale=${scale}`;
         log("INFO", `Video player URL: ${targetUrl}`);
     } else if (item.scale) {
-        // Store scale in session storage for the extension to apply
+        // Store scale in extension storage for the content script to apply
         await chrome.storage.local.set({ currentScale: item.scale });
-    } else {
-        await chrome.storage.local.remove("currentScale");
     }
 
     // Get the active tab and navigate
@@ -189,13 +187,36 @@ async function activateItem(index) {
     // Save current index and set alarm for next item
     await chrome.storage.local.set({ currentIndex: index });
 
-    if (content.length > 1) {
-        // Duration is in seconds, alarms expect minutes or hours
-        const durationMinutes = Math.max(
-            1 / 60,
-            (item.duration || 10) / 60
-        );
-        chrome.alarms.create("advance_content", { delayInMinutes: durationMinutes });
+    await scheduleAdvanceForItem(index);
+}
+
+async function scheduleAdvanceForItem(index) {
+    const config = await configPromise;
+    if (!config || !config.content || config.content.length <= 1) {
+        return;
+    }
+
+    const item = config.content[index] || config.content[0];
+    const durationMinutes = Math.max(
+        1 / 60,
+        (item.duration || 10) / 60
+    );
+
+    chrome.alarms.create("advance_content", { delayInMinutes: durationMinutes });
+}
+
+async function advanceToNextItem() {
+    const config = await configPromise;
+    if (!config || !config.content || config.content.length === 0) {
+        return;
+    }
+
+    const data = await chrome.storage.local.get(["currentIndex"]);
+    const currentIndex = data.currentIndex || 0;
+    const nextIndex = (currentIndex + 1) % config.content.length;
+
+    if (config.content.length > 1) {
+        await activateItem(nextIndex);
     }
 }
 
@@ -229,24 +250,17 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         chrome.tabs.update(sender.tab.id, { url: request.url });
     } else if (request.type === "start_cycling") {
         await initializeCycling();
+    } else if (request.type === "video_error") {
+        log("ERROR", `Video player error for ${request.url}: ${request.error}`);
+        const data = await chrome.storage.local.get(["currentIndex"]);
+        await scheduleAdvanceForItem(data.currentIndex || 0);
     }
 });
 
 // Listen for alarm to advance to next content
 chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === "advance_content") {
-        const config = await configPromise;
-        if (!config || !config.content || config.content.length === 0) {
-            return;
-        }
-
-        const data = await chrome.storage.local.get(["currentIndex"]);
-        let currentIndex = data.currentIndex || 0;
-        const nextIndex = (currentIndex + 1) % config.content.length;
-
-        if (config.content.length > 1) {
-            await activateItem(nextIndex);
-        }
+        await advanceToNextItem();
     }
 });
 
