@@ -49,12 +49,27 @@
     }
 
     function getCredentialValidationError(cred) {
-        if (cred.type !== "http_header") {
+        if (
+            cred.type !== "http_header" &&
+            cred.type !== "azure_client_credentials"
+        ) {
             return "unsupported_type";
         }
 
         if (!isNonEmptyString(cred.domain)) {
             return "missing_domain";
+        }
+
+        if (cred.type === "azure_client_credentials") {
+            if (
+                !isNonEmptyString(cred.tenant_id) ||
+                !isNonEmptyString(cred.client_id) ||
+                !isNonEmptyString(cred.client_secret)
+            ) {
+                return "invalid_azure_client_credentials";
+            }
+
+            return null;
         }
 
         if (!isNonEmptyString(cred.key) || !isNonEmptyString(cred.value)) {
@@ -64,12 +79,43 @@
         return null;
     }
 
+    function getCredentialRequestHeaders(cred) {
+        if (cred.type === "azure_client_credentials") {
+            return [
+                {
+                    header: "X-PowerBI-Tenant-Id",
+                    operation: "set",
+                    value: cred.tenant_id,
+                },
+                {
+                    header: "X-PowerBI-Client-Id",
+                    operation: "set",
+                    value: cred.client_id,
+                },
+                {
+                    header: "X-PowerBI-Client-Secret",
+                    operation: "set",
+                    value: cred.client_secret,
+                },
+            ];
+        }
+
+        return [
+            {
+                header: cred.key,
+                operation: "set",
+                value: cred.value,
+            },
+        ];
+    }
+
     const api = {
         isNonEmptyString,
         escapeRegex,
         buildExactHostRegex,
         resolveCredentialsForUrl,
         getCredentialValidationError,
+        getCredentialRequestHeaders,
     };
 
     if (typeof module !== "undefined" && module.exports) {

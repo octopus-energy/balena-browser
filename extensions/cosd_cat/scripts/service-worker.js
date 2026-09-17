@@ -81,18 +81,18 @@ async function updateDeclarativeNetRequestRules(credentials) {
             return;
         }
 
+        if (validationError === "invalid_azure_client_credentials") {
+            log("WARN", "Skipping invalid Azure client credential", cred);
+            return;
+        }
+
         headerRules.push({
             id: index + 1,
             priority: 1,
             action: {
                 type: "modifyHeaders",
-                requestHeaders: [
-                    {
-                        header: cred.key,
-                        operation: "set",
-                        value: cred.value,
-                    },
-                ],
+                requestHeaders:
+                    CredentialUtils.getCredentialRequestHeaders(cred),
             },
             condition: {
                 // Use regexFilter so credentials only apply to exact hostname.

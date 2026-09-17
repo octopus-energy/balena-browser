@@ -5,6 +5,7 @@ const {
     buildExactHostRegex,
     resolveCredentialsForUrl,
     getCredentialValidationError,
+    getCredentialRequestHeaders,
 } = require("../extensions/cosd_cat/scripts/credential-utils.js");
 
 test("resolveCredentialsForUrl: content credential takes precedence and is host-scoped", () => {
@@ -128,5 +129,46 @@ test("getCredentialValidationError: validates supported shape", () => {
             value: "y",
         }),
         "invalid_key_value"
+    );
+});
+
+test("azure client credentials map to Power BI request headers", () => {
+    const credential = {
+        type: "azure_client_credentials",
+        domain: "app.powerbi.com",
+        tenant_id: "tenant-id",
+        client_id: "client-id",
+        client_secret: "client-secret",
+    };
+
+    assert.equal(getCredentialValidationError(credential), null);
+    assert.deepEqual(getCredentialRequestHeaders(credential), [
+        {
+            header: "X-PowerBI-Tenant-Id",
+            operation: "set",
+            value: "tenant-id",
+        },
+        {
+            header: "X-PowerBI-Client-Id",
+            operation: "set",
+            value: "client-id",
+        },
+        {
+            header: "X-PowerBI-Client-Secret",
+            operation: "set",
+            value: "client-secret",
+        },
+    ]);
+});
+
+test("azure client credentials require all values", () => {
+    assert.equal(
+        getCredentialValidationError({
+            type: "azure_client_credentials",
+            domain: "app.powerbi.com",
+            tenant_id: "tenant-id",
+            client_id: "client-id",
+        }),
+        "invalid_azure_client_credentials"
     );
 });
