@@ -3,11 +3,7 @@
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
 const express = require("express");
-const path = require('path');
 const { spawn } = require('child_process');
-const { readFile, unlink } = require('fs').promises;
-const os = require('os');
-const schedule = require("node-schedule");
 const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
@@ -312,7 +308,7 @@ async function setExtensionStorage() {
 async function main() {
     await SetDefaultFlags();
     await setExtensionStorage();
-    const cdpClient = await launchChromium();
+    await launchChromium();
 }
 
 main().catch((err) => {
@@ -337,7 +333,7 @@ process.on("SIGINT", async () => {
 
 const app = express();
 
-app.get('/screenshot', (req, res) => {
+app.get('/screenshot', (_req, res) => {
     res.set('Content-Type', 'image/webp');
 
     const grim = spawn('grim', ['-l', '0', '-']);
