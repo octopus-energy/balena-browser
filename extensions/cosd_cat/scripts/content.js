@@ -17,9 +17,17 @@ async function setOSD(config) {
     const contentScale = getScaleValue(data.currentScale || 1);
     document.documentElement.style.zoom = contentScale;
 
-    if (config.balenaId != undefined && config.showDeviceTag != "0") {
-        // set the device slug
-        cat.innerHTML = config.balenaId;
+    if (config.balenaId != undefined) {
+        if (fillTagElement) {
+            document.getElementById("screenIdentifier").textContent =
+                config.balenaId;
+        }
+
+        if (config.showDeviceTag == "0") {
+            return;
+        }
+
+        cat.textContent = config.balenaId;
 
         // Get the values
         const displayScale = getScaleValue(config.displayScale || 1);
@@ -55,10 +63,6 @@ async function setOSD(config) {
 
         document.body.append(cat);
 
-        if (fillTagElement) {
-            document.getElementById("screenIdentifier").innerHTML =
-                config.balenaId;
-        }
     }
 }
 

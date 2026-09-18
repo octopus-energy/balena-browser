@@ -16,7 +16,9 @@ esac
 
 # set the device tag directly in the loading html in case the extension
 # doesn't load
-sed -i "s/unconfigured/$BALENA_APP_NAME\/$BALENA_DEVICE_NAME_AT_INIT/g" /home/chromium/loading.html
+fleet_name="${BALENA_APP_NAME:-unknown-fleet}"
+device_name="${BALENA_DEVICE_NAME_AT_INIT:-unknown-device}"
+sed -i "s/unconfigured/${fleet_name}\/${device_name}/g" /home/chromium/loading.html
 
 # Always use Chromium - video is now handled via HTML5 video in the extension
 echo "Launching Chromium"
