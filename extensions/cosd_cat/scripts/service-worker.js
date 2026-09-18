@@ -125,6 +125,20 @@ async function updateDeclarativeNetRequestRules(credentials) {
     });
 }
 
+async function isValidConfig(content) {
+    const knownTypes = ["website", "video"];
+
+    if (!Array.isArray(content)) {
+        return false;
+    }
+    for (const item of content) {
+        if (!knownTypes.includes(item.type)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 /**
  * Activate a content item
  * - Resolve credentials
@@ -136,6 +150,11 @@ async function activateItem(index) {
     const config = await configPromise;
     if (!config || !config.content || config.content.length === 0) {
         log("ERROR", "No content configured");
+        return;
+    }
+
+    if (!(await isValidConfig(config.content))) {
+        log("ERROR", "Invalid content configuration");
         return;
     }
 
@@ -220,18 +239,27 @@ async function advanceToNextItem() {
     }
 }
 
-/**
- * Initialize cycling
- */
 async function initializeCycling() {
+
+    let showUnconfigured = false;
     const config = await configPromise;
     if (config && config.content && config.content.length > 0) {
-        const data = await chrome.storage.local.get(["currentIndex"]);
-         const startIndex = data.currentIndex ?? 0;
-         await activateItem(startIndex);
+        if (!(await isValidConfig(config.content))) {
+            log("WARN", "Invalid content configuration");
+            showUnconfigured = true; // Lets treat invalid configuration as unconfigured
+        } else {
+            const data = await chrome.storage.local.get(["currentIndex"]);
+            const startIndex = data.currentIndex ?? 0;
+            await activateItem(startIndex);
+        }        
     } else {
         // No content configured, show unconfigured page
-        log("WARN", "No content configured, navigating to unconfigured page");
+        showUnconfigured = true;
+        log("WARN", "No content configured");
+    }
+
+    if (showUnconfigured) {
+        log("WARN", "Navigating to unconfigured page");
         const unconfiguredUrl = chrome.runtime.getURL("pages/unconfigured/index.html");
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs && tabs[0]) {
