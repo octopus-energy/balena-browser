@@ -54,34 +54,98 @@ function rotateLogs(logPath) {
     }
 }
 
+function writeLogLine(logPath, level, source, text) {
+    const line = `[${new Date().toISOString()}] [${level}] [${source}] ${text}\n`;
+    fs.appendFile(logPath, line, (err) => {
+        if (err) console.warn(`Browser log write failed: ${err.message}`);
+    });
+}
+
+function formatConsoleArgs(args) {
+    return (args || [])
+        .map((arg) => (arg.value !== undefined ? arg.value : arg.description || arg.type))
+        .join(" ");
+}
+
+// Enables Log/Runtime logging on a single CDP session (either the main page
+// or an attached extension target) and writes captured entries to logPath.
+function attachRuntimeLogging(client, logPath, sourceLabel) {
+    const { Runtime } = client;
+
+    Runtime.consoleAPICalled(({ type, args }) => {
+        const level = type === "error" ? "error" : type === "warning" ? "warn" : "info";
+        writeLogLine(logPath, level, sourceLabel, formatConsoleArgs(args));
+    });
+
+    Runtime.exceptionThrown(({ exceptionDetails }) => {
+        const desc = exceptionDetails.exception
+            ? exceptionDetails.exception.description || exceptionDetails.exception.value
+            : exceptionDetails.text;
+        writeLogLine(logPath, "error", `${sourceLabel}-exception`, desc);
+    });
+
+    return Runtime.enable();
+}
+
 async function setupBrowserLogging(client, logPath) {
-    const { Log, Runtime } = client;
+    const { Log } = client;
     rotateLogs(logPath);
     setInterval(() => rotateLogs(logPath), 60 * 1000);
     try {
         Log.entryAdded(({ entry }) => {
-            const line = `[${new Date().toISOString()}] [${entry.level}] [${entry.source}] ${entry.text}\n`;
-            fs.appendFile(logPath, line, (err) => {
-                if (err) console.warn(`Browser log write failed: ${err.message}`);
-            });
+            writeLogLine(logPath, entry.level, entry.source, entry.text);
         });
         await Log.enable();
 
-        Runtime.exceptionThrown(({ exceptionDetails }) => {
-            const desc = exceptionDetails.exception
-                ? exceptionDetails.exception.description || exceptionDetails.exception.value
-                : exceptionDetails.text;
-            const line = `[${new Date().toISOString()}] [error] [js-exception] ${desc}\n`;
-            fs.appendFile(logPath, line, (err) => {
-                if (err) console.warn(`Browser log write failed: ${err.message}`);
-            });
-        });
-        await Runtime.enable();
+        await attachRuntimeLogging(client, logPath, "page");
 
         console.log(`Browser console logging to: ${logPath}`);
     } catch (err) {
         console.warn(`Could not set up browser logging: ${err}`);
     }
+}
+
+// Extension service workers (e.g. cosd_cat) run as separate CDP targets and
+// are not covered by the main page client, so poll for them and attach
+// logging directly to each one. Service workers can be discarded and
+// recreated, so this keeps re-attaching to newly seen targets.
+// Extension ids are hashed at build time (see extensions/extension_id_calc.py),
+// so targets are matched by their service worker script path instead of name.
+function setupExtensionLogging(logPath, extensionName, workerScriptPath) {
+    const attachedTargetIds = new Set();
+
+    const poll = async () => {
+        let targets;
+        try {
+            targets = await CDP.List({ port: REMOTE_DEBUG_PORT });
+        } catch (err) {
+            return;
+        }
+
+        const workerTargets = targets.filter(
+            (t) =>
+                t.type === "service_worker" &&
+                t.url &&
+                t.url.endsWith(workerScriptPath) &&
+                !attachedTargetIds.has(t.id)
+        );
+
+        for (const target of workerTargets) {
+            attachedTargetIds.add(target.id);
+            try {
+                const swClient = await CDP({ port: REMOTE_DEBUG_PORT, target: target.id });
+                await attachRuntimeLogging(swClient, logPath, extensionName);
+                swClient.on("disconnect", () => attachedTargetIds.delete(target.id));
+                console.log(`Attached extension logging to ${extensionName} service worker (${target.id})`);
+            } catch (err) {
+                attachedTargetIds.delete(target.id);
+                console.warn(`Could not attach logging to ${extensionName} service worker: ${err}`);
+            }
+        }
+    };
+
+    poll();
+    setInterval(poll, 5000);
 }
 
 // Launch the browser with the URL specified
@@ -187,6 +251,7 @@ let launchChromium = async function () {
         }
 
         await setupBrowserLogging(client, BROWSER_LOG_PATH);
+        setupExtensionLogging(BROWSER_LOG_PATH, "cosd_cat", "/scripts/service-worker.js");
     } catch (err) {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }
