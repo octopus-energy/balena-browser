@@ -111,7 +111,7 @@ fetch(chrome.runtime.getURL("config.json"))
                 // On loading page, trigger the service worker to start cycling
                 log("INFO", "Loading page detected - starting content cycling");
                 chrome.runtime.sendMessage(chrome.runtime.id, {
-                    type: "start_cycling",
+                    type: "startCycling",
                 });
             } else {
                 setOSD(config);

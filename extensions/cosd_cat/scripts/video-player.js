@@ -83,7 +83,7 @@ function setupPlayer() {
 
         reportedError = true;
         chrome.runtime.sendMessage(chrome.runtime.id, {
-            type: 'video_error',
+            type: 'videoError',
             url: videoUrl,
             error,
         });

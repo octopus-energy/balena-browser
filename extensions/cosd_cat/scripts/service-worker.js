@@ -202,7 +202,7 @@ async function scheduleAdvanceForItem(index) {
         (item.duration || 10) / 60
     );
 
-    chrome.alarms.create("advance_content", { delayInMinutes: durationMinutes });
+    chrome.alarms.create("advanceContent", { delayInMinutes: durationMinutes });
 }
 
 async function advanceToNextItem() {
@@ -248,9 +248,9 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         sendResponse(tabErrors[sender.tab.id]);
     } else if (request.type === "updateLocation") {
         chrome.tabs.update(sender.tab.id, { url: request.url });
-    } else if (request.type === "start_cycling") {
+    } else if (request.type === "startCycling") {
         await initializeCycling();
-    } else if (request.type === "video_error") {
+    } else if (request.type === "videoError") {
         log("ERROR", `Video player error for ${request.url}: ${request.error}`);
         const data = await chrome.storage.local.get(["currentIndex"]);
         await scheduleAdvanceForItem(data.currentIndex || 0);
@@ -259,7 +259,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
 // Listen for alarm to advance to next content
 chrome.alarms.onAlarm.addListener(async (alarm) => {
-    if (alarm.name === "advance_content") {
+    if (alarm.name === "advanceContent") {
         await advanceToNextItem();
     }
 });
