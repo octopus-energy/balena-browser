@@ -164,7 +164,7 @@ async function activateItem(index) {
     }
 
     const item = content[index];
-    log("INFO", `Activating content item ${index}:`, item);
+    log("INFO", `Activating content item ${index}:`, JSON.stringify(item));
 
     // Convert S3 URLs and build target URL
     let targetUrl = convertS3Url(item.url);
