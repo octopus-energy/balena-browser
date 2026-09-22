@@ -2,16 +2,13 @@
 
 const chromeLauncher = require("chrome-launcher");
 const CDP = require("chrome-remote-interface");
-const schedule = require("node-schedule");
+const express = require("express");
+const { spawn } = require('child_process');
 const fs = require("fs");
 
 const DISPLAY_SCALE = process.env.DISPLAY_SCALE || "1.0";
-const LAUNCH_URLS = (
-    process.env.LAUNCH_URL || "chrome-extension://ljnalmhbggcggncjbchegchjcdockndi/pages/unconfigured/index.html"
-).split(",");
-const UPSTREAM_URL = process.env.UPSTREAM_URL;
-const REFRESH_SCHEDULE = process.env.REFRESH_SCHEDULE || 0;
-const ROTATE_SCHEDULE = process.env.ROTATE_SCHEDULE || 0;
+const CONTENT = parseJson(process.env.CONFIG_DISPLAY);
+const SHARED_CREDENTIALS = parseJson(process.env.SHARED_CREDENTIALS);
 const RELOAD_ON_ERROR = process.env.RELOAD_ON_ERROR || 0;
 const RELOAD_ON_ERROR_TIMER = (process.env.RELOAD_ON_ERROR_TIMER || 5) * 1000;
 const PERSISTENT_DATA = process.env.PERSISTENT || "0";
@@ -25,13 +22,14 @@ const OSD_CSS = parseJson(process.env.OSD_CSS);
 const OSD_FONT_SIZE = process.env.OSD_FONT_SIZE || "18px";
 const OSD_FONT_FAMILY = process.env.OSD_FONT_FAMILY || "helvetica";
 const SHOW_CURSOR = process.env.SHOW_CURSOR || "0";
+const BROWSER_LOG_PATH = process.env.BROWSER_LOG_PATH || "/data/chrome.log";
+const BROWSER_LOG_MAX_BYTES = parseInt(process.env.BROWSER_LOG_MAX_BYTES || "5242880", 10);
 
 // Environment variables which can be overriden from the API
 let kioskMode = process.env.KIOSK || "0";
 let enableGpu = process.env.ENABLE_GPU || "0";
 
 let DEFAULT_FLAGS = [];
-let nextUrlIndex = 0;
 let flags = [];
 
 function parseJson(string) {
@@ -42,23 +40,113 @@ function parseJson(string) {
     }
 }
 
-// Returns the URL to display, adhering to the hieracrchy:
-// 1) the configured LAUNCH_URL
-// 2) the default static HTML
-function getUrlToDisplay() {
-    nextUrl = LAUNCH_URLS[nextUrlIndex++];
-    if (nextUrlIndex >= LAUNCH_URLS.length) {
-        nextUrlIndex = 0;
+function rotateLogs(logPath) {
+    try {
+        if (fs.statSync(logPath).size >= BROWSER_LOG_MAX_BYTES) {
+            fs.renameSync(logPath, `${logPath}.1`);
+        }
+    } catch (err) {
+        if (err.code !== 'ENOENT') console.warn(`Log rotation failed: ${err.message}`);
     }
+}
 
-    console.log(`Next URL: ${nextUrl}`);
+function writeLogLine(logPath, level, source, text) {
+    const line = `[${new Date().toISOString()}] [${level}] [${source}] ${text}\n`;
+    fs.appendFile(logPath, line, (err) => {
+        if (err) console.warn(`Browser log write failed: ${err.message}`);
+    });
+}
 
-    return nextUrl;
+function formatConsoleArgs(args) {
+    return (args || [])
+        .map((arg) => (arg.value !== undefined ? arg.value : arg.description || arg.type))
+        .join(" ");
+}
+
+// Enables Log/Runtime logging on a single CDP session (either the main page
+// or an attached extension target) and writes captured entries to logPath.
+function attachRuntimeLogging(client, logPath, sourceLabel) {
+    const { Runtime } = client;
+
+    Runtime.consoleAPICalled(({ type, args }) => {
+        const level = type === "error" ? "error" : type === "warning" ? "warn" : "info";
+        writeLogLine(logPath, level, sourceLabel, formatConsoleArgs(args));
+    });
+
+    Runtime.exceptionThrown(({ exceptionDetails }) => {
+        const desc = exceptionDetails.exception
+            ? exceptionDetails.exception.description || exceptionDetails.exception.value
+            : exceptionDetails.text;
+        writeLogLine(logPath, "error", `${sourceLabel}-exception`, desc);
+    });
+
+    return Runtime.enable();
+}
+
+async function setupBrowserLogging(client, logPath) {
+    const { Log } = client;
+    rotateLogs(logPath);
+    setInterval(() => rotateLogs(logPath), 60 * 1000);
+    try {
+        Log.entryAdded(({ entry }) => {
+            writeLogLine(logPath, entry.level, entry.source, entry.text);
+        });
+        await Log.enable();
+
+        await attachRuntimeLogging(client, logPath, "page");
+
+        console.log(`Browser console logging to: ${logPath}`);
+    } catch (err) {
+        console.warn(`Could not set up browser logging: ${err}`);
+    }
+}
+
+// Extension service workers (e.g. cosd_cat) run as separate CDP targets and
+// are not covered by the main page client, so poll for them and attach
+// logging directly to each one. Service workers can be discarded and
+// recreated, so this keeps re-attaching to newly seen targets.
+// Extension ids are hashed at build time (see extensions/extension_id_calc.py),
+// so targets are matched by their service worker script path instead of name.
+function setupExtensionLogging(logPath, extensionName, workerScriptPath) {
+    const attachedTargetIds = new Set();
+
+    const poll = async () => {
+        let targets;
+        try {
+            targets = await CDP.List({ port: REMOTE_DEBUG_PORT });
+        } catch (err) {
+            return;
+        }
+
+        const workerTargets = targets.filter(
+            (t) =>
+                t.type === "service_worker" &&
+                t.url &&
+                t.url.endsWith(workerScriptPath) &&
+                !attachedTargetIds.has(t.id)
+        );
+
+        for (const target of workerTargets) {
+            attachedTargetIds.add(target.id);
+            try {
+                const swClient = await CDP({ port: REMOTE_DEBUG_PORT, target: target.id });
+                await attachRuntimeLogging(swClient, logPath, extensionName);
+                swClient.on("disconnect", () => attachedTargetIds.delete(target.id));
+                console.log(`Attached extension logging to ${extensionName} service worker (${target.id})`);
+            } catch (err) {
+                attachedTargetIds.delete(target.id);
+                console.warn(`Could not attach logging to ${extensionName} service worker: ${err}`);
+            }
+        }
+    };
+
+    poll();
+    setInterval(poll, 5000);
 }
 
 // Launch the browser with the URL specified
 let launchChromium = async function () {
-    let url = "file:///home/chromium/loading.html"
+    let url = "file:///home/chromium/loading.html";
     await chromeLauncher.killAll();
 
     flags = [];
@@ -75,6 +163,7 @@ let launchChromium = async function () {
             "--hide-scrollbars",
             "--disable-session-crashed-bubble",
             "--check-for-update-interval=31536000",
+            "--disk-cache-size=2147483647",
         ];
 
         // Merge the chromium default and balena default flags
@@ -156,25 +245,16 @@ let launchChromium = async function () {
                 console.error(`Could not set up Network events. Error: ${err}`);
             }
         }
+
+        await setupBrowserLogging(client, BROWSER_LOG_PATH);
+        setupExtensionLogging(BROWSER_LOG_PATH, "cosd_cat", "/scripts/service-worker.js");
     } catch (err) {
         console.error(`Could not connect to Chrome via CDP. Error: ${err}`);
     }
     currentUrl = url;
     return { cdpClient: client, chrome: chrome };
 };
-async function goToUrl(cdpClient, url) {
-    console.log(`Navigating to URL: ${url}`);
-    try {
-        await cdpClient.Page.navigate({ url: url });
-    } catch (err) {
-        console.error(`Could not navigate to URL via CDP. Error: ${err}`);
-    }
-}
 
-async function reloadPage(cdpClient) {
-    console.log("Refreshing page.");
-    await goToUrl(cdpClient, LAUNCH_URLS[nextUrlIndex]);
-}
 
 // Get's the chrome-launcher default flags, minus the extensions and audio muting flags.
 async function SetDefaultFlags() {
@@ -183,7 +263,21 @@ async function SetDefaultFlags() {
     );
 }
 
-async function setExtensionStorage(startingUrl) {
+async function setExtensionStorage() {
+    let sharedCredentials = {};
+
+    if (
+        SHARED_CREDENTIALS &&
+        typeof SHARED_CREDENTIALS === "object" &&
+        !Array.isArray(SHARED_CREDENTIALS)
+    ) {
+        sharedCredentials = SHARED_CREDENTIALS;
+    } else if (SHARED_CREDENTIALS !== undefined) {
+        console.warn(
+            "SHARED_CREDENTIALS must be a JSON object keyed by domain; ignoring invalid value"
+        );
+    }
+
     const extensionConfig = {
         balenaId: `${FLEET_NAME}/${DEVICE_NAME}`,
         displayScale: DISPLAY_SCALE,
@@ -192,58 +286,29 @@ async function setExtensionStorage(startingUrl) {
         fontFamily: OSD_FONT_FAMILY,
         showDeviceTag: SHOW_DEVICE_TAG,
         reloadOnErrorTimer: RELOAD_ON_ERROR_TIMER,
-        upstreamUrl: UPSTREAM_URL,
-        startingUrl: startingUrl,
-        showCursor: SHOW_CURSOR
+        showCursor: SHOW_CURSOR,
+        content: CONTENT || [],
+        sharedCredentials,
     };
     const jsonData = JSON.stringify(extensionConfig);
 
-    fs.writeFile(
-        "/usr/share/chromium/extensions/cosd_cat/config.json",
-        jsonData,
-        "utf8",
-        (err) => {
-            if (err) {
-                console.error("Error writing config to file", err);
-            } else {
-                console.log("Config written to file");
-            }
-        }
-    );
+    try {
+        await fs.promises.writeFile(
+            "/usr/share/chromium/extensions/cosd_cat/config.json",
+            jsonData,
+            "utf8"
+        );
+        console.log("Config written to file");
+    } catch (err) {
+        console.error("Error writing config to file", err);
+        throw err;
+    }
 }
 
-
 async function main() {
-    let url = getUrlToDisplay();
     await SetDefaultFlags();
-    await setExtensionStorage(url);
-    const { cdpClient, chrome } = await launchChromium();
-
-    if (cdpClient != null) {
-        if (LAUNCH_URLS.length > 1 && ROTATE_SCHEDULE !== 0) {
-            schedule.scheduleJob(ROTATE_SCHEDULE, async () => {
-                let url = await getUrlToDisplay();
-                await goToUrl(cdpClient, url);
-            });
-        }
-
-        if (REFRESH_SCHEDULE !== 0) {
-            schedule.scheduleJob(
-                REFRESH_SCHEDULE,
-                async () => await reloadPage(cdpClient)
-            );
-        }
-    } else {
-        console.log(
-            "WARNING - CDP client is null and so refresh and rotate schedules are not available."
-        );
-    }
-    if (chrome.process) {
-        chrome.process.on('exit', (code) => {
-            console.log(`Chromium quit, restarting container`);
-            process.exit();
-        });
-    }
+    await setExtensionStorage();
+    await launchChromium();
 }
 
 main().catch((err) => {
@@ -263,7 +328,40 @@ main().catch((err) => {
 });
 
 process.on("SIGINT", async () => {
-    // Stop all scheduled jobs
-    await schedule.gracefulShutdown();
     process.exit();
+});
+
+const app = express();
+
+app.get('/screenshot', (_req, res) => {
+    res.set('Content-Type', 'image/webp');
+
+    const grim = spawn('grim', ['-l', '0', '-']);
+
+    const cwebp = spawn('cwebp', ['-quiet', '-resize', '1280', '0', '-o', '-', '--', '-']);
+
+    grim.stdout.pipe(cwebp.stdin);
+    cwebp.stdout.pipe(res);
+
+    grim.on('error', (err) => {
+        console.error('Grim failed to start:', err);
+        if (!res.headersSent) res.status(500).send('Screenshot generation failed.');
+    });
+
+    cwebp.on('error', (err) => {
+        console.error('cwebp failed to start:', err);
+        if (!res.headersSent) res.status(500).send('WebP conversion failed.');
+    });
+
+    grim.on('close', (code) => {
+        if (code !== 0) console.error(`Grim crashed with exit code ${code}`);
+    });
+
+    cwebp.on('close', (code) => {
+        if (code !== 0) console.error(`cwebp crashed with exit code ${code}`);
+    });
+});
+
+app.listen(8080, () => {
+    console.log('Browser API running on port: ' + 8080);
 });
