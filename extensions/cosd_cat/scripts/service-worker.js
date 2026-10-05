@@ -1,30 +1,13 @@
-importScripts("logger.js", "credential-utils.js");
+importScripts("logger.js", "credential-utils.js", "config-utils.js");
 
 const tabErrors = {};
 
-const configPromise = fetch(chrome.runtime.getURL("config.json"))
-    .then((response) => {
-        if (!response.ok) {
-            throw new Error(
-                `Failed to fetch config.json: ${response.statusText}`
-            );
-        }
-        return response.json();
-    })
-    .catch((error) => {
-        log("ERROR", "Failed to fetch config.json:", error);
-        return null;
-    });
-
-function convertS3Url(url) {
-    if (url.startsWith("s3://")) {
-        const s3Path = url.substring(5); // Remove "s3://"
-        const [bucket, ...keyParts] = s3Path.split("/");
-        const key = keyParts.join("/");
-        return `https://${bucket}.s3.amazonaws.com/${key}`;
-    }
-    return url;
-}
+const configPromise = ConfigUtils.loadConfig(
+    chrome.runtime.getURL("config.json")
+).catch((error) => {
+    log("ERROR", "Failed to fetch config.json:", error);
+    return null;
+});
 
 /**
  * Resolve credentials for a given URL
@@ -125,20 +108,6 @@ async function updateDeclarativeNetRequestRules(credentials) {
     });
 }
 
-async function isValidConfig(content) {
-    const knownTypes = ["website", "video"];
-
-    if (!Array.isArray(content)) {
-        return false;
-    }
-    for (const item of content) {
-        if (!knownTypes.includes(item.type)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 /**
  * Activate a content item
  * - Resolve credentials
@@ -153,7 +122,7 @@ async function activateItem(index) {
         return;
     }
 
-    if (!(await isValidConfig(config.content))) {
+    if (!ConfigUtils.isValidConfig(config.content)) {
         log("ERROR", "Invalid content configuration");
         return;
     }
@@ -167,7 +136,7 @@ async function activateItem(index) {
     log("INFO", `Activating content item ${index}:`, JSON.stringify(item));
 
     // Convert S3 URLs and build target URL
-    let targetUrl = convertS3Url(item.url);
+    let targetUrl = ConfigUtils.convertS3Url(item.url);
 
     // Resolve credentials
     const credentials = resolveCredentials(
@@ -244,7 +213,7 @@ async function initializeCycling() {
     let showUnconfigured = false;
     const config = await configPromise;
     if (config && config.content && config.content.length > 0) {
-        if (!(await isValidConfig(config.content))) {
+        if (!ConfigUtils.isValidConfig(config.content)) {
             log("WARN", "Invalid content configuration");
             showUnconfigured = true; // Lets treat invalid configuration as unconfigured
         } else {
