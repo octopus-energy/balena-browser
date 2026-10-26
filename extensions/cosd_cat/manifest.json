@@ -1,23 +1,26 @@
 {
     "name": "cosd_cat",
-    "description": "Display a message on the webpage",
+    "description": "Manages content on octoDash devices",
     "version": "0.1",
     "manifest_version": 3,
     "content_scripts": [
         {
-            "js": ["scripts/content.js"],
+            "js": ["scripts/logger.js", "scripts/content.js"],
             "matches": ["<all_urls>"],
             "run_at": "document_start"
         }
     ],
-    "permissions": ["storage", "webRequest"],
+    "permissions": ["storage", "webRequest", "declarativeNetRequest", "alarms", "tabs"],
     "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "scripts/service-worker.js"
     },
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline'"
+    },
     "web_accessible_resources": [
         {
-            "resources": ["config.json"],
+            "resources": ["config.json", "pages/video/index.html", "pages/video/constantine-swim.webp", "pages/error/index.html", "pages/unconfigured/index.html", "scripts/logger.js", "scripts/credential-utils.js", "scripts/video-player.js"],
             "matches": ["<all_urls>"]
         }
     ]

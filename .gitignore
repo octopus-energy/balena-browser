@@ -1,2 +1,4 @@
 .DS_Store
 node_modules
+extensions/cosd_cat/test_config.json
+extensions/cosd_cat/test_config_2.json
