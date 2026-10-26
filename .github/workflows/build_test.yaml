@@ -9,8 +9,8 @@ jobs:
     strategy:
       matrix:
         fleet:
-          - "techops_balena_test/octo-bagelspatula-x86"
-          - "techops_balena_test/octo-bagelspatula-arm64"
+          - "techops_balena_test/octo-browser-x86"
+          - "techops_balena_test/octo-browser-arm64"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
